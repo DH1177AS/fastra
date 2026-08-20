@@ -1,0 +1,48 @@
+"""Domain Work Item: Jembatan - Kelompok XXIV"""
+def load_wi_jembatan(kg):
+    from fastra_core.knowledge.nodes import WorkItemNode
+    items = [
+        ("wi-titik-as-jembatan", "JEM.001", "Pekerjaan Penentuan Titik As Jembatan Pemancang (Abutment & Pier)", "titik", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-detour-road", "JEM.002", "Pembuatan Jembatan Sementara / Jalur Alih Proyek (Detour Road)", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-cofferdam", "JEM.003", "Pemasangan Dinding Pembatas Air Sungai Sementara (Cofferdam)", "m²", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-dewatering-jembatan", "JEM.004", "Pemompaan Air Sungai Keluar Area Kerja Pondasi (Dewatering Jembatan)", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-mobilisasi-borepile", "JEM.005", "Mobilisasi Alat Berat Bore Pile Machine", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-borepile-drilling", "JEM.006", "Pengeboran Lubang Pondasi Dalam Jembatan (Bore Pile Drilling)", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-bentonit", "JEM.007", "Pemasangan Cairan Bentonit Penahan Dinding Bor Pondasi", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-rebar-cage-borepile", "JEM.008", "Pemasangan Anyaman Besi Silinder Tulangan Pondasi Bore Pile", "kg", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-tremie-cor", "JEM.009", "Pengecoran Beton Pondasi Dalam Metode Pipa Tremi Bawah Air", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-pile-chipping-jembatan", "JEM.010", "Pembobokan Kepala Beton Bore Pile (Pile Chipping)", "titik", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-abutment-galian", "JEM.011", "Galian Tanah Struktur Kepala Jembatan (Abutment Excavation)", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-pier-head-rebar", "JEM.012", "Pembesian Struktur Dudukan Tiang Jembatan (Pile Cap / Pier Head)", "kg", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-pier-head-bekisting", "JEM.013", "Pemasangan Bekisting Baja Struktur Kepala Jembatan", "m²", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-pier-head-cor", "JEM.014", "Pengecoran Beton Massal Struktur Kepala Jembatan Mutu K-350", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-bearing-pad", "JEM.015", "Pemasangan Bantalan Karet Jembatan (Rubber Elastomeric Bearing Pad)", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-angkur-bearing", "JEM.016", "Pemasangan Angkur Baja Penahan Geser Bantalan Jembatan", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-mobilisasi-girder", "JEM.017", "Mobilisasi Balok Girder Beton Pracetak (PC-I Girder) Ke Lokasi", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-launching-girder", "JEM.018", "Ereksi Peluncuran Balok Girder ke Atas Jembatan Launcher Crane", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-post-tension", "JEM.019", "Pekerjaan Penarikan Kabel Baja Pasca-Tegang Girder Jembatan", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-grouting-tendon", "JEM.020", "Penyuntikan Semen Grout ke Dalam Pipa Kabel Girder", "buah", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-diaphragm-beam", "JEM.021", "Pemasangan Balok Pengikat Antar Girder (Diaphragm Beam Cast in Situ)", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-precast-shuttering", "JEM.022", "Pemasangan Pelat Lantai Panel Pracetak Antar Girder", "m²", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-rebar-lantai-jembatan", "JEM.023", "Perakitan Anyaman Besi Bertulang Pembesian Lantai Atas Jembatan", "kg", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-scupper-pipe", "JEM.024", "Pemasangan Pipa Sparing Lubang Buang Air Jembatan (Scupper Pipe)", "titik", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-cor-lantai-jembatan", "JEM.025", "Pengecoran Lapisan Lantai Beton Utama Jembatan Mutu K-400", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-expansion-joint", "JEM.026", "Pemasangan Sambungan Siar Muai Baja Tepi Jembatan", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-parapet-wall", "JEM.027", "Pemasangan Sandaran Pembatas Jembatan Beton (Parapet Wall Concrete)", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-handrail-jembatan", "JEM.028", "Pemasangan Pipa Railing Sandaran Jembatan Besi Galvanis", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-talud-batu-jembatan", "JEM.029", "Pekerjaan Pasangan Batu Talud Penahan Tanah Samping Jembatan", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-gabion-jembatan", "JEM.030", "Pemasangan Lapisan Batu Bronjong Kawat Pencegah Erosi Air Sungai", "m³", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-waterproofing-jembatan", "JEM.031", "Penyemprotan Lapisan Waterproofing Membran Atas Lantai Jembatan", "m²", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-aspal-jembatan", "JEM.032", "Penghamparan Lapisan Aspal Hotmix di Atas Lantai Jembatan", "ton", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-baby-roller-jembatan", "JEM.033", "Pemadatan Lapisan Aspal Atas Jembatan Menggunakan Baby Roller", "ton", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-lampu-jembatan", "JEM.034", "Pemasangan Lampu Penerangan Jalan Jembatan Arsitektural", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-kabel-lampu-jembatan", "JEM.035", "Instalasi Kabel Jalur Tiang Lampu Jembatan di Dalam Struktur Parapet", "m'", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-penangkal-petir-jembatan", "JEM.036", "Instalasi Sistem Penangkal Petir Struktur Atas Jembatan", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-static-load-test", "JEM.037", "Pengujian Beban Statis Jembatan Truk Berjejer (Static Load Test)", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-dynamic-load-test", "JEM.038", "Pengujian Beban Dinamis Jembatan Truk Berjalan (Dynamic Load Test)", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-akselerometer", "JEM.039", "Uji Keandalan Getaran Struktur Jembatan Sensor Akselerometer", "unit", "Spesifikasi Jembatan", "JEMBATAN"),
+        ("wi-bersih-bawah-jembatan", "JEM.040", "Pembersihan Total Sisa Material Perancah Bawah Jembatan", "Ls", "Spesifikasi Jembatan", "JEMBATAN"),
+    ]
+    for args in items:
+        kg.add_work_item(WorkItemNode(*args))
+    print(f"  ✅ Jembatan: {len(items)} item pekerjaan dimuat")

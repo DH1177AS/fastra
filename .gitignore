@@ -1,0 +1,73 @@
+﻿# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# ===== Virtual Environment =====
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# ===== Testing & Linting =====
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ===== IDE & Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS Files =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ===== Data Sensitif & Database =====
+*.xlsx
+*.xls
+*.csv
+*.sqlite3
+*.db
+*.bak
+*.backup
+
+# ===== Logs & Profiling =====
+*.log
+api_audit.jsonl
+*.prof
+profile_pipeline.prof
+
+# ===== Benchmark Results (generated) =====
+dev_tools/benchmark_results_10k.json
+dev_tools/benchmark_ci_results.json
+
+# ===== Kredensial & Keys =====
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secret*
+*.secret
+
+# ===== Backup & Legacy yang tidak perlu di-commit =====
+backup_pre_cleanup_*/
+legacy/
+*.old
+*.orig
