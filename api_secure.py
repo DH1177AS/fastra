@@ -24,6 +24,7 @@ import uvicorn
 from fastra_core.knowledge.loader import create_fastra_knowledge_graph
 from fastra_core.compiler.compiler_pipeline import QuantityCompilerPipeline
 from fastra_core.compiler.cost_engine import CostEngine
+from fastra_core.compiler.ccm_validator import run_pipeline as validate_ccm_master
 
 # ---------- Config ----------
 VALID_REGIONS = {
@@ -89,6 +90,8 @@ RATE_MAX = int(os.getenv("FASTRA_RATE_MAX", "10"))
 RATE_WINDOW = int(os.getenv("FASTRA_RATE_WINDOW", "60"))
 REDIS_URL = os.getenv("FASTRA_REDIS_URL", None)
 
+
+
 class RateLimiter:
     """Rate limiter dengan dua backend: in-memory (default) dan Redis-ready."""
     def __init__(self):
@@ -99,7 +102,7 @@ class RateLimiter:
                 import redis
                 self.redis_client = redis.Redis.from_url(REDIS_URL)
                 self.backend = "redis"
-                print(f"✅ Rate limiter menggunakan Redis: {REDIS_URL}")
+                print(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Rate limiter menggunakan Redis: {REDIS_URL}")
             except Exception as e:
                 logging.warning(f"Redis tidak tersedia, fallback ke in-memory: {e}")
                 self.backend = "memory"
@@ -107,13 +110,24 @@ class RateLimiter:
     def is_allowed(self, key: str) -> bool:
         now = time.time()
         if self.backend == "redis":
-            # Gunakan pipeline Redis untuk operasi atomic
-            pipe = self.redis_client.pipeline()
-            pipe.zadd(key, {now: now})
-            pipe.zremrangebyscore(key, 0, now - RATE_WINDOW)
-            pipe.zcard(key)
-            _, _, count = pipe.execute()
-            return count <= RATE_MAX
+            # Fixed window counter + TTL (atomic via INCR)
+            bucket = int(now // RATE_WINDOW)
+            redis_key = f"{key}:{bucket}"
+            try:
+                current = self.redis_client.incr(redis_key)
+                if current == 1:
+                    self.redis_client.expire(redis_key, RATE_WINDOW)
+                return current <= RATE_MAX
+            except Exception as e:
+                logging.warning(f"Redis error, fallback ke memory: {e}")
+                self.backend = "memory"
+                self.store = {}
+                reqs = [t for t in self.store.get(key, []) if now - t < RATE_WINDOW]
+                if len(reqs) >= RATE_MAX:
+                    return False
+                reqs.append(now)
+                self.store[key] = reqs
+                return True
         else:
             reqs = [t for t in self.store.get(key, []) if now - t < RATE_WINDOW]
             if len(reqs) >= RATE_MAX:
@@ -158,6 +172,9 @@ class EstimateRequest(BaseModel):
     inflation_pct: float = Field(3.5, ge=0, le=100)
     duration_months: int = Field(12, ge=1, le=120)
     ccm: Optional[dict] = None  # CCM envelope dari klien
+    contract_value: Optional[float] = Field(None, ge=0, description="Nilai kontrak aktual untuk SMKK (opsional)")
+    include_smkk: bool = Field(False, description="Aktifkan perhitungan biaya SMKK")
+    risk_level: Optional[str] = Field("KECIL", description="Tingkat risiko SMKK: KECIL/SEDANG/BESAR")
 
     @field_validator("region")
     def check_region(cls, v):
@@ -304,7 +321,10 @@ def estimate_rab(req: EstimateRequest, request: Request):
             "contingency_pct": req.contingency_pct,
             "inflation_pct": req.inflation_pct,
             "duration_months": req.duration_months,
-            "location_factor": 1.0
+            "location_factor": 1.0,
+            "include_smkk": req.include_smkk,
+            "risk_level": req.risk_level,
+            "contract_value": req.contract_value,
         })
         rab = engine.generate_rab(result["boq"], req.region)
         logging.info(f"Estimate RAB for {req.region} success; client={request.client.host if request.client else 'unknown'}; api_key_hash={API_KEY_HASH[:8]}...")
@@ -316,6 +336,17 @@ def estimate_rab(req: EstimateRequest, request: Request):
 @app.get("/health")
 def health():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+@app.post("/validate-ccm")
+async def validate_ccm_endpoint(request: Request):
+    """Terima CCM mentah multi‑part, kembalikan ValidationReport."""
+    try:
+        raw = (await request.body()).decode("utf-8")
+        report = validate_ccm_master(raw)
+        return {"status": "validated", "report": report}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"status": "error", "message": str(e)})
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)

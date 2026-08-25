@@ -1,0 +1,37 @@
+﻿version: "3.9"
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FASTRA_DB_USER:-fastra_user}
+      POSTGRES_PASSWORD: ${FASTRA_DB_PASSWORD:-fastra_password}
+      POSTGRES_DB: ${FASTRA_DB_NAME:-fastra_dt}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FASTRA_DB_USER:-fastra_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      FASTRA_DATABASE_URL: postgresql+psycopg2://${FASTRA_DB_USER:-fastra_user}:${FASTRA_DB_PASSWORD:-fastra_password}@db:5432/${FASTRA_DB_NAME:-fastra_dt}
+      FASTRA_DT_SECRET_KEY: ${FASTRA_DT_SECRET_KEY}
+      FASTRA_DT_API_KEY: ${FASTRA_DT_API_KEY}
+    ports:
+      - "8000:8000"
+    command: uvicorn api_digital_twin_secure:app --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_data:

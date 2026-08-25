@@ -1,0 +1,130 @@
+﻿{
+  "levels": {
+    "ACES-000": {
+      "name": "Foundation",
+      "test_files": [
+        "tests/test_angle.py",
+        "tests/test_area.py",
+        "tests/test_coordinate.py",
+        "tests/test_currency.py",
+        "tests/test_density.py",
+        "tests/test_length.py",
+        "tests/test_mass.py",
+        "tests/test_matrix4x4.py",
+        "tests/test_numerical.py",
+        "tests/test_quaternion.py",
+        "tests/test_temperature.py",
+        "tests/test_time.py",
+        "tests/test_tolerance.py",
+        "tests/test_transform.py",
+        "tests/test_vector.py",
+        "tests/test_volume.py",
+        "tests/test_identity.py"
+      ],
+      "required_pass_rate": 90,
+      "critical_count": 3,
+      "high_count": 5,
+      "medium_count": 2,
+      "low_count": 0
+    },
+    "ACES-100": {
+      "name": "Ontology",
+      "test_files": [
+        "tests/test_ontology.py",
+        "tests/test_identity.py"
+      ],
+      "required_pass_rate": 90,
+      "critical_count": 3,
+      "high_count": 5,
+      "medium_count": 2,
+      "low_count": 0
+    },
+    "ACES-200": {
+      "name": "CCM",
+      "test_files": [
+        "tests/test_ccm.py",
+        "tests/test_geometry_fundamental.py",
+        "tests/test_geometry_polygon.py",
+        "tests/test_geometry_solid.py"
+      ],
+      "required_pass_rate": 90,
+      "critical_count": 4,
+      "high_count": 5,
+      "medium_count": 1,
+      "low_count": 0
+    },
+    "ACES-300": {
+      "name": "Knowledge Network",
+      "test_files": [
+        "tests/test_knowledge.py"
+      ],
+      "required_pass_rate": 90,
+      "critical_count": 1,
+      "high_count": 6,
+      "medium_count": 3,
+      "low_count": 0
+    },
+    "ACES-400": {
+      "name": "Quantity Compiler",
+      "test_files": [
+        "tests/test_compliance_aces400.py"
+      ],
+      "required_pass_rate": 100,
+      "critical_count": 10,
+      "high_count": 15,
+      "medium_count": 0,
+      "low_count": 0
+    },
+    "ACES-500": {
+      "name": "Cost Engine",
+      "test_files": [
+        "tests/test_compliance_aces500.py",
+        "tests/test_aces500_extended.py"
+      ],
+      "required_pass_rate": 100,
+      "critical_count": 8,
+      "high_count": 15,
+      "medium_count": 0,
+      "low_count": 0
+    },
+    "ACES-600": {
+      "name": "Digital Twin",
+      "test_files": [
+        "tests/test_aces600_fase1.py",
+        "tests/test_aces600_fase1_integration.py",
+        "tests/test_aces600_fase2.py",
+        "tests/test_aces600_fase3.py",
+        "tests/test_aces600_fase4.py",
+        "tests/test_aces600_fase5.py",
+        "tests/test_aces600_hardening_audit.py",
+        "tests/test_aces600_persistence.py",
+        "tests/test_aces600_hardening_offline_archive.py",
+        "tests/test_aces600_hardening_misc.py",
+        "tests/test_aces600_database.py",
+        "tests/test_aces600_domain_qs.py",
+        "tests/test_api_digital_twin.py",
+        "tests/test_api_digital_twin_secure.py",
+        "tests/test_api_digital_twin_secure_extended.py"
+      ],
+      "required_pass_rate": 100,
+      "critical_count": 8,
+      "high_count": 12,
+      "medium_count": 0,
+      "low_count": 0
+    },
+    "ACES-700": {
+      "name": "AI Layer",
+      "test_files": [
+        "tests/test_aces700_fase1.py",
+        "tests/test_aces700_fase2.py",
+        "tests/test_aces700_fase3.py",
+        "tests/test_aces700_fase4.py"
+      ],
+      "required_pass_rate": 100,
+      "critical_count": 6,
+      "high_count": 9,
+      "medium_count": 0,
+      "low_count": 0
+    }
+  }
+}

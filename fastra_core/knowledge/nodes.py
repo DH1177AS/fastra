@@ -9,6 +9,7 @@ class MaterialNode:
     unit: str
     category: str = ""
     specifications: Dict = field(default_factory=dict)
+    volatility_factor: float = 0.0
 
 @dataclass
 class LaborNode:
@@ -16,6 +17,7 @@ class LaborNode:
     name: str
     role: str
     daily_rate: Currency
+    region: str = ""
 
 @dataclass
 class EquipmentNode:
@@ -27,6 +29,9 @@ class EquipmentNode:
     rate_per_month: Optional[float] = None
     category: str = ""
     specifications: Dict = field(default_factory=dict)
+    mobilization_cost: float = 0.0
+    operator_cost_per_day: float = 0.0
+    fuel_cost_per_hour: float = 0.0
 
 @dataclass
 class WorkItemNode:

@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from fastra_core.primitives.length import Length
 from fastra_core.spatial.coordinate import Coordinate
 from fastra_core.ccm.physical import Wall, Column, Beam, Slab, Foundation
@@ -40,7 +40,7 @@ class TestBeam:
 class TestSlab:
     def test_area(self):
         boundary = [Coordinate(0,0,0), Coordinate(5,0,0), Coordinate(5,4,0), Coordinate(0,4,0), Coordinate(0,0,0)]
-        s = Slab(name="Plat Lantai", boundary=boundary, thickness=Length(0.12))
+        s = Slab(name="Plat Lantai", boundary=boundary, thickness=Length(0.12), supports=["col-001"])
         assert s.area.value == 20.0
         assert s.volume.value == 2.4
 
@@ -53,10 +53,13 @@ class TestRoom:
 
 class TestMaterial:
     def test_create(self):
-        m = Material(name="Beton K-250", material_class="CONCRETE", unit="m³", strength_grade="K-250")
+        m = Material(name="Beton K-250", material_class="CONCRETE", material_type="BETON", unit="m³", strength_grade="K-250")
         assert m.unit == "m³"
 
 class TestWorkItem:
     def test_create(self):
         wi = WorkItem(name="Pasangan Bata", work_item_code="PEK.DIND.001", unit="m²", quantity=100.0)
         assert wi.quantity == 100.0
+
+
+

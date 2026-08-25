@@ -190,12 +190,6 @@ class Foundation(UniversalObject):
         from fastra_core.geometry.polygon import is_self_intersecting
         if is_self_intersecting(self.footprint):
             raise ValueError("Footprint pondasi self-intersecting")
-        valid_roof_types = {"GABLE", "HIP", "FLAT", "SHED", "DOME", "CUSTOM"}
-        if self.roof_type not in valid_roof_types:
-            raise ValueError(f"roof_type tidak valid: {self.roof_type}")
-        valid_structure_types = {"BAJA_RINGAN", "KAYU", "BAJA_BERAT", "BETON"}
-        if self.structure_type not in valid_structure_types:
-            raise ValueError(f"structure_type tidak valid: {self.structure_type}")
         valid_foundation_types = {"FOOTPLATE", "BATU_KALI", "BORE_PILE", "TIANG_PANCANG", "RAFT"}
         if self.foundation_type not in valid_foundation_types:
             raise ValueError(f"foundation_type tidak valid: {self.foundation_type}")
@@ -260,18 +254,6 @@ class Door(UniversalObject):
             raise ValueError("Tinggi pintu harus > 0")
         if self.sill_height.value < 0:
             raise ValueError("Sill height tidak boleh negatif")
-        valid_window_types = {"CASEMENT", "SLIDING", "FIXED", "AWNING"}
-        if self.window_type not in valid_window_types:
-            raise ValueError(f"window_type tidak valid: {self.window_type}")
-        valid_glazing = {"CLEAR", "TINTED", "REFLECTIVE", "LOW_E"}
-        if self.glazing_type not in valid_glazing:
-            raise ValueError(f"glazing_type tidak valid: {self.glazing_type}")
-        valid_door_types = {"SINGLE", "DOUBLE", "SLIDING", "FOLDING"}
-        if self.door_type not in valid_door_types:
-            raise ValueError(f"door_type tidak valid: {self.door_type}")
-        valid_swing = {"INWARD", "OUTWARD", "LEFT", "RIGHT"}
-        if self.swing_direction not in valid_swing:
-            raise ValueError(f"swing_direction tidak valid: {self.swing_direction}")
 
     @property
     def area(self) -> Area:
@@ -298,18 +280,6 @@ class Window(UniversalObject):
             raise ValueError("Tinggi jendela harus > 0")
         if self.sill_height.value < 0:
             raise ValueError("Sill height tidak boleh negatif")
-        valid_window_types = {"CASEMENT", "SLIDING", "FIXED", "AWNING"}
-        if self.window_type not in valid_window_types:
-            raise ValueError(f"window_type tidak valid: {self.window_type}")
-        valid_glazing = {"CLEAR", "TINTED", "REFLECTIVE", "LOW_E"}
-        if self.glazing_type not in valid_glazing:
-            raise ValueError(f"glazing_type tidak valid: {self.glazing_type}")
-        valid_door_types = {"SINGLE", "DOUBLE", "SLIDING", "FOLDING"}
-        if self.door_type not in valid_door_types:
-            raise ValueError(f"door_type tidak valid: {self.door_type}")
-        valid_swing = {"INWARD", "OUTWARD", "LEFT", "RIGHT"}
-        if self.swing_direction not in valid_swing:
-            raise ValueError(f"swing_direction tidak valid: {self.swing_direction}")
 
     @property
     def area(self) -> Area:

@@ -1,0 +1,375 @@
+{
+  "ConstructionCanonicalModel": {
+    "ModelMetadata": {
+      "SchemaVersion": "CCM-RES-2026.V4",
+      "MergedAgainstMasterSchema": "CCM-MASTER-2026.V1",
+      "Timestamp": "2026-08-21T00:00:00Z",
+      "AuthoringTool": "Manual Demo",
+      "Organization": "FASTRA Internal",
+      "ProjectContext": {
+        "ProjectID": "PRJ-DEMO-002",
+        "ProjectName": "Rumah Demo Lengkap",
+        "Phase": "Detailed Design",
+        "Currency": "IDR"
+      },
+      "_DatasetNature": "SYNTHETIC_DEMO_DATA"
+    },
+    "SiteContext": {
+      "SiteID": "ST-DEMO-02",
+      "Location": {
+        "Address": "Jl. Demo",
+        "Coordinates": {
+          "Latitude": -6.1751,
+          "Longitude": 106.6301
+        }
+      },
+      "Geotechnical": {
+        "SoilType": "Medium Stiff Clay",
+        "WaterTableDepth_m": -1.8
+      },
+      "ZoningConstraints": {
+        "LandArea_m2": 120.0,
+        "KDB_Allowed_Percent": 60.0,
+        "KLB_Allowed": 1.2,
+        "GSB_Front_m": 4.0
+      }
+    },
+    "BuildingEntities": [
+      {
+        "BuildingID": "BLDG-01",
+        "BuildingName": "Demo House",
+        "GrossFloorArea_m2": 20.0,
+        "BuildingVolume_m3": 68.0,
+        "Storeys": [
+          {
+            "StoreyID": "ST-01",
+            "StoreyName": "Ground Floor",
+            "Elevation_Level_m": 0.0,
+            "ClearHeight_m": 3.4,
+            "SpatialZones": [
+              {
+                "ZoneID": "ZONE-01",
+                "Name": "Public",
+                "Spaces": [
+                  {
+                    "SpaceID": "SP-01",
+                    "Name": "Living",
+                    "Dimensions": {
+                      "Area_m2": 20.0,
+                      "Volume_m3": 68.0,
+                      "Perimeter_m": 18.0
+                    },
+                    "Boundary": {
+                      "Points": [
+                        {
+                          "x": 0.0,
+                          "y": 0.0
+                        },
+                        {
+                          "x": 5.0,
+                          "y": 0.0
+                        },
+                        {
+                          "x": 5.0,
+                          "y": 4.0
+                        },
+                        {
+                          "x": 0.0,
+                          "y": 4.0
+                        }
+                      ]
+                    },
+                    "WBS_Code": "WBS-1.02.01",
+                    "FinishesSchedule": {
+                      "Floor": {
+                        "Material": "Tile 60x60",
+                        "Spec": "Demo",
+                        "Quantity_m2": 20.0
+                      },
+                      "Wall": {
+                        "Material": "Plaster + Paint",
+                        "Spec": "Demo",
+                        "Quantity_m2": 50.0
+                      },
+                      "Ceiling": {
+                        "Material": "Gypsum 9mm",
+                        "Spec": "Demo",
+                        "Quantity_m2": 20.0
+                      }
+                    },
+                    "BuildingElements": [
+                      {
+                        "ElementID": "WAL-01",
+                        "Type": "Wall",
+                        "ParentSpaceID": "SP-01",
+                        "name": "Wall Demo",
+                        "Properties": {
+                          "Thickness_mm": 150
+                        },
+                        "geometry": {
+                          "axis_line": {
+                            "points": [
+                              {
+                                "x": 0.0,
+                                "y": 0.0,
+                                "z": 0.0
+                              },
+                              {
+                                "x": 5.0,
+                                "y": 0.0,
+                                "z": 0.0
+                              }
+                            ]
+                          },
+                          "height": 3.4,
+                          "thickness": 0.15
+                        }
+                      },
+                      {
+                        "ElementID": "WIN-01",
+                        "Type": "Window",
+                        "ParentSpaceID": "SP-01",
+                        "Dimensions": {
+                          "Width_mm": 1500,
+                          "Height_mm": 1200
+                        },
+                        "geometry": {
+                          "width": 1.5,
+                          "height": 1.2,
+                          "host_wall_uuid": "WAL-01",
+                          "position_on_wall": {
+                            "distance_from_start_m": 1.5,
+                            "sill_height_m": 1.0
+                          }
+                        }
+                      }
+                    ],
+                    "MEP_DistributionPoints": {
+                      "Electrical": [
+                        {
+                          "FixtureID": "EL-SW-01",
+                          "Type": "Switch",
+                          "Brand": "Schneider",
+                          "Count": 1,
+                          "CircuitPath": {
+                            "length_m": 4.0,
+                            "estimated_length_m": null,
+                            "source_panel_id": "PANEL-01"
+                          }
+                        },
+                        {
+                          "FixtureID": "EL-SK-01",
+                          "Type": "Socket",
+                          "Brand": "Schneider",
+                          "Count": 2,
+                          "CircuitPath": {
+                            "length_m": 6.0,
+                            "estimated_length_m": null,
+                            "source_panel_id": "PANEL-01"
+                          }
+                        }
+                      ],
+                      "PlumbingFixtures": [
+                        {
+                          "FixtureID": "PL-WC-01",
+                          "Type": "WC",
+                          "Brand": "TOTO",
+                          "PipeRun": {
+                            "cold_water_length_m": 3.0,
+                            "waste_length_m": 2.5
+                          }
+                        }
+                      ],
+                      "HVAC": {
+                        "EstimatedHeatLoad_BTU": 9000,
+                        "EquipmentProvision": "AC Split 1.0 PK"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "InfrastructureSystems": {
+      "StructuralSystem": {
+        "Foundation": {
+          "Type": "Batu Kali + Footplat",
+          "ConcreteGrade": "K-250",
+          "RebarGrade": "BjTS 420",
+          "geometry": {
+            "footprint": {
+              "points": [
+                {
+                  "x": -0.3,
+                  "y": -0.3
+                },
+                {
+                  "x": 5.3,
+                  "y": -0.3
+                },
+                {
+                  "x": 5.3,
+                  "y": 4.3
+                },
+                {
+                  "x": -0.3,
+                  "y": 4.3
+                }
+              ]
+            },
+            "depth": 1.2
+          }
+        },
+        "Framing": {
+          "Sloof_Dimensions_mm": [
+            150,
+            200
+          ],
+          "Column_Main_Dimensions_mm": [
+            150,
+            150
+          ],
+          "RingBalk_Dimensions_mm": [
+            150,
+            200
+          ]
+        },
+        "StructuralElements": [
+          {
+            "ElementID": "COL-01",
+            "Type": "Column",
+            "ParentSpaceID": "BUILDING_LEVEL",
+            "geometry": {
+              "width": 0.15,
+              "depth": 0.15,
+              "height": 3.4,
+              "base_point": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "ElementID": "COL-02",
+            "Type": "Column",
+            "ParentSpaceID": "BUILDING_LEVEL",
+            "geometry": {
+              "width": 0.15,
+              "depth": 0.15,
+              "height": 3.4,
+              "base_point": {
+                "x": 5.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "ElementID": "BM-01",
+            "Type": "Beam",
+            "ParentSpaceID": "BUILDING_LEVEL",
+            "geometry": {
+              "width": 0.15,
+              "depth": 0.2,
+              "length": 5.0,
+              "start_point": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 3.4
+              },
+              "end_point": {
+                "x": 5.0,
+                "y": 0.0,
+                "z": 3.4
+              }
+            }
+          },
+          {
+            "ElementID": "SLB-01",
+            "Type": "Slab",
+            "ParentSpaceID": "BUILDING_LEVEL",
+            "geometry": {
+              "boundary": {
+                "points": [
+                  {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 5.0,
+                    "y": 0.0
+                  },
+                  {
+                    "x": 5.0,
+                    "y": 4.0
+                  },
+                  {
+                    "x": 0.0,
+                    "y": 4.0
+                  }
+                ]
+              },
+              "thickness": 0.12
+            }
+          }
+        ]
+      },
+      "MainUtilitySystems": {
+        "Electrical_Main": {
+          "IncomingSource": "PLN Grid",
+          "PowerCapacity_VA": 2200,
+          "DistributionBoard": "MCB Box",
+          "MainCable_Type": "NYM 3x4mm2"
+        },
+        "Plumbing_Main": {
+          "WaterSource": "Deep Well",
+          "PumpSystem": "Jet Pump 250W",
+          "SepticTank": {
+            "Type": "Bio",
+            "Capacity_Liters": 2000
+          }
+        }
+      }
+    },
+    "ProjectSchedule": {
+      "DurationValue": 6,
+      "DurationUnit": "Bulan",
+      "SCurveAvailable": true,
+      "WorkWeights": [
+        {
+          "WBS_Code": "WBS-1.01",
+          "WeightPercent": 10.0,
+          "Description": "Persiapan"
+        },
+        {
+          "WBS_Code": "WBS-1.02",
+          "WeightPercent": 55.0,
+          "Description": "Struktur"
+        },
+        {
+          "WBS_Code": "WBS-1.03",
+          "WeightPercent": 25.0,
+          "Description": "MEP"
+        },
+        {
+          "WBS_Code": "WBS-1.04",
+          "WeightPercent": 10.0,
+          "Description": "Finishing"
+        }
+      ]
+    },
+    "CommercialAssumptions": {
+      "ContractorQualification": "K2",
+      "OverheadPercent": 10.0,
+      "ProfitPercent": 12.0,
+      "ContingencyPercent": 5.0,
+      "SpecificRisks": [
+        "Akses sempit"
+      ]
+    }
+  }
+}

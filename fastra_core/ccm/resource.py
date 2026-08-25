@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+﻿from dataclasses import dataclass, field
 from typing import Optional, Dict
 from fastra_core.ontology.universal_object import UniversalObject
 from fastra_core.ontology.entity_type import EntityType
@@ -10,7 +10,7 @@ from decimal import Decimal
 class Material(UniversalObject):
     material_class: str = "CONCRETE"
     material_type: str = ""
-    unit: str = "m³"
+    unit: str = "mÂ³"
     density: Optional[float] = None
     strength_grade: Optional[str] = None
     specifications: Dict = field(default_factory=dict)
@@ -23,7 +23,7 @@ class Material(UniversalObject):
             raise ValueError(f"material_class tidak valid: {self.material_class}")
         if not self.unit.strip():
             raise ValueError("unit tidak boleh kosong")
-        validate_dimension(self.unit, 'time')
+        pass
         validate_dimension(self.unit, 'volume')
         if self.density is not None and self.density <= 0:
             raise ValueError("density harus > 0")
@@ -69,3 +69,4 @@ class Labor(UniversalObject):
             raise ValueError(f"skill_level tidak valid: {self.skill_level}")
         if not isinstance(self.productivity, dict):
             raise ValueError("productivity harus dict")
+

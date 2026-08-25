@@ -17,9 +17,12 @@ class KnowledgeGraph:
         self.prices: Dict[str, List[PriceRecord]] = {}
         self.price_history: List = []
         self.templates: List = []
+        self.segment_overrides: Dict[str, Dict[str, Dict]] = {}
 
     def add_material(self, m: MaterialNode): self.materials[m.id] = m
-    def add_labor(self, l: LaborNode): self.labors[l.id] = l
+    def add_labor(self, l: LaborNode):
+        key = f"{l.id}::{l.region}"
+        self.labors[key] = l
     def add_equipment(self, e: EquipmentNode): self.equipments[e.id] = e
     def add_work_item(self, w: WorkItemNode): self.work_items[w.id] = w
     def add_supplier(self, s: SupplierNode): self.suppliers[s.id] = s
@@ -57,29 +60,134 @@ class KnowledgeGraph:
             "regions": sorted(regions),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
-    def get_unit_price(self, wi_id: str, region: str) -> dict:
-        """Menghitung harga satuan work item berdasarkan data produksi (Fase 2)."""
-        material_cost = 0.0; labor_cost = 0.0; equipment_cost = 0.0
+    def get_unit_price(self, wi_id: str, region: str, price_date: str = None) -> dict:
+        """Menghitung harga satuan work item dengan breakdown untuk ACES-500."""
+        material_cost = 0.0
+        labor_cost = 0.0
+        equipment_cost = 0.0
+        material_breakdown = []
+        labor_breakdown = []
+        equipment_breakdown = []
+        errors = []
+
+        # Material
         for mat_req in self.material_requirements.get(wi_id, []):
             price = None
-            if mat_req.material_id in self.prices:
-                for pr in self.prices[mat_req.material_id]:
-                    if pr.region == region: price = pr.price; break
-                if not price and self.prices[mat_req.material_id]: price = self.prices[mat_req.material_id][0].price
-            if price:
-                if hasattr(price, 'value'): price = price.value
-                material_cost += mat_req.coefficient * (mat_req.waste_factor if hasattr(mat_req,'waste_factor') else 1.0) * float(price)
+            for pr in self.prices.get(mat_req.material_id, []):
+                if pr.region == region:
+                    price = pr
+                    break
+            if price is None and self.prices.get(mat_req.material_id):
+                price = self.prices[mat_req.material_id][0]
+            if price is None:
+                errors.append({"type": "missing_price", "material_id": mat_req.material_id})
+                continue
+
+            # Validasi rentang waste factor
+            waste = mat_req.waste_factor
+            if waste < 1.0 or waste > 1.3:
+                raise ValueError(f"Waste factor {waste} di luar batas untuk {mat_req.material_id}")
+
+            # Validasi tanggal harga jika price_date disediakan
+            if price_date is not None:
+                try:
+                    from datetime import datetime
+                    pd = datetime.fromisoformat(price_date)
+                    vf = datetime.fromisoformat(str(price.valid_from))
+                    vu = None
+                    if price.valid_until is not None:
+                        vu = datetime.fromisoformat(str(price.valid_until))
+                    if pd < vf or (vu is not None and pd > vu):
+                        errors.append({"type": "expired_price", "material_id": mat_req.material_id, "price_date": price_date})
+                        continue
+                except Exception as e:
+                    errors.append({"type": "invalid_price_date", "material_id": mat_req.material_id, "message": str(e)})
+                    continue
+
+            price_value = price.price
+            if hasattr(price_value, 'value'):
+                price_value = price_value.value
+            cost = mat_req.coefficient * waste * float(price_value)
+            material_cost += cost
+            mat_node = self.materials.get(mat_req.material_id)
+            volatility = getattr(mat_node, 'volatility_factor', 0.0) if mat_node else 0.0
+            material_breakdown.append({
+                "material_id": mat_req.material_id,
+                "coefficient": mat_req.coefficient,
+                "waste_factor": waste,
+                "unit_price": float(price_value),
+                "cost": round(cost, 4),
+                "volatility_factor": volatility,
+                "price_source": f"{mat_req.material_id}/{price.region}/{price.valid_from}",
+            })
+
+        # Tenaga kerja
         for lab_req in self.labor_requirements.get(wi_id, []):
-            lab = self.labors.get(lab_req.labor_id)
-            if lab:
-                rate = lab.daily_rate; 
-                if hasattr(rate, 'value'): rate = rate.value
-                labor_cost += lab_req.coefficient * float(rate)
+            lab_candidates = [l for l in self.labors.values() if l.id == lab_req.labor_id]
+            lab = None
+            # pilih labor dengan region cocok, jika tidak ada pilih yang region kosong
+            for candidate in lab_candidates:
+                if candidate.region == region:
+                    lab = candidate
+                    break
+            if lab is None:
+                for candidate in lab_candidates:
+                    if candidate.region == "":
+                        lab = candidate
+                        break
+            if lab is None and lab_candidates:
+                lab = lab_candidates[0]
+            if lab is None:
+                errors.append({"type": "missing_labor", "labor_id": lab_req.labor_id})
+                continue
+            rate = lab.daily_rate
+            if hasattr(rate, 'value'):
+                rate = rate.value
+            cost = lab_req.coefficient * float(rate)
+            labor_cost += cost
+            labor_breakdown.append({
+                "labor_id": lab_req.labor_id,
+                "coefficient": lab_req.coefficient,
+                "daily_rate": float(rate),
+                "region": lab.region or region,
+                "cost": round(cost, 4),
+                "wage_source": f"{lab_req.labor_id}/{lab.region or region}",
+            })
+
+        # Peralatan
         for eq_req in self.equipment_requirements.get(wi_id, []):
             eq = self.equipments.get(eq_req.equipment_id)
-            if eq:
-                rate = getattr(eq, 'rate_per_hour', 0) or 0
-                if hasattr(rate, 'value'): rate = rate.value
-                equipment_cost += eq_req.coefficient * float(rate)
-        up = material_cost + labor_cost + equipment_cost
-        return {"unit_price": round(up,2),"material_cost":round(material_cost,2),"labor_cost":round(labor_cost,2),"equipment_cost":round(equipment_cost,2)}
+            if eq is None:
+                errors.append({"type": "missing_equipment", "equipment_id": eq_req.equipment_id})
+                continue
+            rate = getattr(eq, 'rate_per_hour', 0) or getattr(eq, 'rate_per_day', 0) or 0
+            if hasattr(rate, 'value'):
+                rate = rate.value
+            rate = float(rate)
+            mobilization = getattr(eq, 'mobilization_cost', 0.0) or 0.0
+            operator = (getattr(eq, 'operator_cost_per_day', 0.0) or 0.0) * eq_req.coefficient
+            fuel = (getattr(eq, 'fuel_cost_per_hour', 0.0) or 0.0) * eq_req.coefficient
+            cost = eq_req.coefficient * rate + mobilization + operator + fuel
+            equipment_cost += cost
+            equipment_breakdown.append({
+                "equipment_id": eq_req.equipment_id,
+                "coefficient": eq_req.coefficient,
+                "rate": rate,
+                "mobilization_cost": mobilization,
+                "operator_cost": operator,
+                "fuel_cost": fuel,
+                "cost": round(cost, 4),
+                "equipment_source": f"{eq_req.equipment_id}/{region}",
+            })
+
+        total = material_cost + labor_cost + equipment_cost
+        return {
+            "unit_price": round(total, 2),
+            "material_cost": round(material_cost, 2),
+            "labor_cost": round(labor_cost, 2),
+            "equipment_cost": round(equipment_cost, 2),
+            "material_breakdown": material_breakdown,
+            "labor_breakdown": labor_breakdown,
+            "equipment_breakdown": equipment_breakdown,
+            "errors": errors,
+        }

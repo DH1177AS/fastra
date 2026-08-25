@@ -1,0 +1,12 @@
+{
+  "mode": "ci",
+  "n_entities": 6250,
+  "n_relationships": 1250,
+  "compilation_status": "SUCCESS",
+  "total_time_seconds": 2.1938,
+  "peak_memory_mb": null,
+  "warnings_count": 5000,
+  "errors_count": 0,
+  "boq_total_items": 14,
+  "boq_project_total": 2310487640.0
+}

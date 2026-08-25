@@ -136,6 +136,21 @@ def create_fastra_knowledge_graph():
     except Exception as e:
         logger.warning(f"Equipment skipped: {e}")
 
+    # INTEGRASI DATA ACES-500 (pajak, risiko, jadwal, template)
+    try:
+        from fastra_core.knowledge.integrasi_aces500 import integrasi_aces500
+        integrasi_aces500(kg)
+    except Exception as e:
+        logger.warning(f"Integrasi ACES-500 skipped: {e}")
+
+    # LOAD SEGMENT CALIBRATION (AHSP per segmen)
+    try:
+        from fastra_core.knowledge.segment_calibration import load_segment_calibration
+        load_segment_calibration(kg)
+        logger.info("Segment calibration dimuat.")
+    except Exception as e:
+        logger.warning(f"Segment calibration skipped: {e}")
+
     # HARGA REGIONAL & MATERIAL
     _load_prices_from_excel(kg)
     logger.info("Knowledge Graph selesai dibuat.")
