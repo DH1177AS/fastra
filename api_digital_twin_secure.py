@@ -76,7 +76,7 @@ app = FastAPI(title="FASTRA Digital Twin Secure API", version="2.0.0")
 # ------------------------------------------------------------------------------
 # CORS & Security Middleware
 # ------------------------------------------------------------------------------
-cors_origins = os.getenv("FASTRA_CORS_ORIGINS", "*").split(",")
+cors_origins = os.getenv("FASTRA_CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -106,7 +106,7 @@ db.seed_default_users()
 
 master_security: Optional[MasterSecurity] = None
 try:
-    master_security = None  # TODO: initialize properly when master password is set
+    master_security = MasterSecurity.initialize_master_subsystem()
     logger.info("MasterSecurity initialized successfully")
 except Exception as exc:
     logger.error("Master Security initialization failed: %s", exc, exc_info=True)
@@ -463,6 +463,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Dict[str, str]:
     logger.info("User %s logged in successfully", user.username)
     return token_domain.to_transport()
 
+
+@app.get("/projects/{project_uuid}", response_model=Dict[str, Any])
+def get_project(project_uuid: str, current_user: Any = Depends(get_current_user)):
+    """Mengembalikan pengaturan proyek untuk dashboard."""
+    if not project_uuid or not project_uuid.strip():
+        raise HTTPException(status_code=400, detail="Project UUID tidak valid")
+    # TODO: implementasikan query database untuk proyek nyata
+    return {
+        "project_uuid": project_uuid,
+        "contract_value": None,
+        "planned_start_date": None,
+        "planned_end_date": None,
+    }
 
 @app.post(
     "/projects/{project_uuid}/snapshots",
@@ -884,3 +897,7 @@ def master_audit_integrity() -> Dict[str, Any]:
 @app.get("/health", response_model=Dict[str, str])
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+
+

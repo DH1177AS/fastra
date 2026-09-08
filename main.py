@@ -1,4 +1,4 @@
-"""
+﻿"""
 FASTRA Backend Runner Engine
 Menjalankan API Digital Twin Secure (port 8000) dan API AI Secure (port 8001)
 secara bersamaan dalam satu proses menggunakan multiprocessing terisolasi.
@@ -102,7 +102,7 @@ def main() -> None:
         except RuntimeError as exc:
             logger.warning("Gagal set start method spawn: %s", exc)
 
-    load_dotenv()
+    load_dotenv(override=True)
 
     # Validasi environment (fail-fast)
     env_state = os.getenv("FASTRA_ENV", "development").strip().lower()
@@ -196,3 +196,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

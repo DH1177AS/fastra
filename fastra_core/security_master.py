@@ -40,15 +40,23 @@ class MasterSecurity(BaseModel):
         allow_inf_nan=False,
     )
 
-    master_hash: bytes = Field(..., description="Hash satu arah dari kata sandi master")
+    master_hash: str = Field(..., min_length=16, description="Hash satu arah dari kata sandi master")
     audit_log: Any = Field(..., description="Instansiasi mesin SecureAuditLog append-only terenkripsi")
     file_key: bytes = Field(..., description="Kunci kriptografis simetris untuk enkripsi berkas brankas")
 
-    @field_validator("master_hash", "file_key", mode="after")
+    @field_validator("master_hash", mode="after")
     @classmethod
-    def validate_bytes_fields(cls, value: Any) -> bytes:
+    def validate_master_hash(cls, value: Any) -> str:
+        if not isinstance(value, str) or not value.strip():
+            logger.error("SECURITY_MASTER_HASH_INVALID: %r", value)
+            raise ValueError("MASTER_HASH_MUST_BE_NON_EMPTY_STRING")
+        return value
+
+    @field_validator("file_key", mode="after")
+    @classmethod
+    def validate_file_key_bytes(cls, value: Any) -> bytes:
         if not isinstance(value, bytes) or len(value) == 0:
-            logger.error("SECURITY_MASTER_BYTES_FIELD_INVALID: %r", value)
+            logger.error("SECURITY_MASTER_FILE_KEY_INVALID: %r", value)
             raise ValueError("FIELD_MUST_BE_NON_EMPTY_BYTES")
         return value
 
@@ -247,5 +255,7 @@ class MasterSecurity(BaseModel):
             logger.info("Runtime anti-debug check passed in production environment")
         else:
             logger.debug("Runtime anti-debug check skipped (non-production)")
+
+
 
 

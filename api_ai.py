@@ -70,7 +70,7 @@ app = FastAPI(title="FASTRA AI Layer Secure API", version="1.0.0")
 # ------------------------------------------------------------------------------
 # CORS & Security Middleware
 # ------------------------------------------------------------------------------
-cors_origins = os.getenv("FASTRA_CORS_ORIGINS", "*").split(",")
+cors_origins = os.getenv("FASTRA_CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -100,7 +100,7 @@ db.seed_default_users()
 
 master_security: Optional[MasterSecurity] = None
 try:
-    master_security = None  # TODO: initialize properly when master password is set
+    master_security = MasterSecurity.initialize_master_subsystem()
     logger.info("MasterSecurity initialized successfully")
 except Exception as exc:
     logger.error("Master Security initialization failed: %s", exc, exc_info=True)
@@ -669,3 +669,7 @@ def health() -> Dict[str, str]:
 
 
 app.include_router(router)
+
+
+
+
