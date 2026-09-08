@@ -23,7 +23,7 @@ from fastra_security.runtime.memory_guard import secure_string, wipe_string
 
 logger = logging.getLogger("fastra_core.security_master")
 
-PRODUCTION_ENV_TOKEN = "production"
+PRODUCTION_ENV_TOKEN = "production"  # nosec B105
 
 
 class MasterSecurity(BaseModel):
@@ -247,3 +247,5 @@ class MasterSecurity(BaseModel):
             logger.info("Runtime anti-debug check passed in production environment")
         else:
             logger.debug("Runtime anti-debug check skipped (non-production)")
+
+
