@@ -1,7 +1,22 @@
 ﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "matrix_metadata": {
+    "system_identifier": "FASTRA_CES_ACES_MATRIX",
+    "architecture_version": "2.0.0",
+    "security_classification": "RESTRICTED_MILITARY_GRADE",
+    "description": "ACTS Compliance Matrix untuk FASTRA CES. Setiap level menentukan test files dan ambang kelulusan.",
+    "generated_by": "FASTRA Engineering",
+    "generated_at": "2026-09-07T00:00:00Z"
+  },
   "levels": {
     "ACES-000": {
       "name": "Foundation",
+      "description": "Validasi primitif dasar, numerik, dan identity.",
+      "required_pass_rate": 90,
+      "critical_count": 3,
+      "high_count": 5,
+      "medium_count": 2,
+      "low_count": 0,
       "test_files": [
         "tests/test_angle.py",
         "tests/test_area.py",
@@ -18,77 +33,82 @@
         "tests/test_tolerance.py",
         "tests/test_transform.py",
         "tests/test_vector.py",
-        "tests/test_volume.py",
-        "tests/test_identity.py"
-      ],
-      "required_pass_rate": 90,
-      "critical_count": 3,
-      "high_count": 5,
-      "medium_count": 2,
-      "low_count": 0
+        "tests/test_volume.py"
+      ]
     },
     "ACES-100": {
       "name": "Ontology",
-      "test_files": [
-        "tests/test_ontology.py",
-        "tests/test_identity.py"
-      ],
+      "description": "Validasi ontologi dan universal object.",
       "required_pass_rate": 90,
       "critical_count": 3,
       "high_count": 5,
       "medium_count": 2,
-      "low_count": 0
+      "low_count": 0,
+      "test_files": [
+        "tests/test_ontology.py",
+        "tests/test_identity.py"
+      ]
     },
     "ACES-200": {
       "name": "CCM",
+      "description": "Validasi Construction Component Model (CCM) dan geometri.",
+      "required_pass_rate": 90,
+      "critical_count": 4,
+      "high_count": 5,
+      "medium_count": 1,
+      "low_count": 0,
       "test_files": [
         "tests/test_ccm.py",
         "tests/test_geometry_fundamental.py",
         "tests/test_geometry_polygon.py",
         "tests/test_geometry_solid.py"
-      ],
-      "required_pass_rate": 90,
-      "critical_count": 4,
-      "high_count": 5,
-      "medium_count": 1,
-      "low_count": 0
+      ]
     },
     "ACES-300": {
       "name": "Knowledge Network",
-      "test_files": [
-        "tests/test_knowledge.py"
-      ],
+      "description": "Validasi knowledge graph dan importer.",
       "required_pass_rate": 90,
       "critical_count": 1,
       "high_count": 6,
       "medium_count": 3,
-      "low_count": 0
+      "low_count": 0,
+      "test_files": [
+        "tests/test_knowledge.py"
+      ]
     },
     "ACES-400": {
       "name": "Quantity Compiler",
-      "test_files": [
-        "tests/test_compliance_aces400.py"
-      ],
+      "description": "Validasi compiler kuantitas dan compliance ACES-400.",
       "required_pass_rate": 100,
       "critical_count": 10,
       "high_count": 15,
       "medium_count": 0,
-      "low_count": 0
+      "low_count": 0,
+      "test_files": [
+        "tests/test_compliance_aces400.py"
+      ]
     },
     "ACES-500": {
       "name": "Cost Engine",
-      "test_files": [
-        "tests/test_compliance_aces500.py",
-        "tests/test_aces500_extended.py"
-      ],
+      "description": "Validasi cost engine dan compliance ACES-500.",
       "required_pass_rate": 100,
       "critical_count": 8,
       "high_count": 15,
       "medium_count": 0,
-      "low_count": 0
+      "low_count": 0,
+      "test_files": [
+        "tests/test_compliance_aces500.py",
+        "tests/test_aces500_extended.py"
+      ]
     },
     "ACES-600": {
       "name": "Digital Twin",
+      "description": "Validasi digital twin, persistence, API, dan hardening.",
+      "required_pass_rate": 100,
+      "critical_count": 8,
+      "high_count": 12,
+      "medium_count": 0,
+      "low_count": 0,
       "test_files": [
         "tests/test_aces600_fase1.py",
         "tests/test_aces600_fase1_integration.py",
@@ -105,26 +125,22 @@
         "tests/test_api_digital_twin.py",
         "tests/test_api_digital_twin_secure.py",
         "tests/test_api_digital_twin_secure_extended.py"
-      ],
-      "required_pass_rate": 100,
-      "critical_count": 8,
-      "high_count": 12,
-      "medium_count": 0,
-      "low_count": 0
+      ]
     },
     "ACES-700": {
       "name": "AI Layer",
+      "description": "Validasi AI layer dan compliance ACES-700.",
+      "required_pass_rate": 100,
+      "critical_count": 6,
+      "high_count": 9,
+      "medium_count": 0,
+      "low_count": 0,
       "test_files": [
         "tests/test_aces700_fase1.py",
         "tests/test_aces700_fase2.py",
         "tests/test_aces700_fase3.py",
         "tests/test_aces700_fase4.py"
-      ],
-      "required_pass_rate": 100,
-      "critical_count": 6,
-      "high_count": 9,
-      "medium_count": 0,
-      "low_count": 0
+      ]
     }
   }
 }

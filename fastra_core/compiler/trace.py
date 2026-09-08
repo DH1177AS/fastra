@@ -1,52 +1,86 @@
+# fastra_core\compiler\trace.py
 
-"""
-TraceLog deterministik untuk ACES-400, sesuai §13.4.
-"""
-import hashlib
-import json
+from __future__ import annotations
+
+import enum
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class TraceStageType(str, enum.Enum):
+   
+    GEOMETRY_BUILDER = "GEOMETRY_BUILDER"
+    QUANTITY_GENERATOR = "QUANTITY_GENERATOR"
+    BOQ_GENERATOR = "BOQ_GENERATOR"
+    SMKK_ENGINE = "SMKK_ENGINE"
+    COST_ENGINE = "COST_ENGINE"
+
+class TraceStepDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    stage: TraceStageType = Field(...)
+    operation: str = Field(..., min_length=2, max_length=128, pattern=r"^[A-Za-z0-9_\-\s\(\)\&\.\,]+$")
+    output_value: str = Field(..., min_length=1, max_length=256)
+    operation_detail: Optional[str] = Field(default=None, max_length=1024)
+    mapped_to: Optional[str] = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_\-\.]+$")
+    input_entity: Optional[List[str]] = Field(default=None, max_length=500)
+
 
 class TraceLog:
-    def __init__(self, trace_uuid: Optional[str] = None, generated_at: Optional[str] = None):
-        self.trace_uuid = trace_uuid
-        self.generated_at = generated_at or datetime.now(timezone.utc).isoformat()
-        self.steps: List[Dict[str, Any]] = []
-
-    def add_step(self, stage: str, operation: str, input_entity: str = None,
-                 input_value: Any = None, operation_detail: str = None,
-                 output_value: Any = None, mapped_to: str = None):
-        step = {
-            "step": len(self.steps) + 1,
-            "stage": stage,
-            "operation": operation,
-            "timestamp": self.generated_at,  # deterministik
-        }
-        if input_entity is not None:
-            step["input_entity"] = input_entity
-        if input_value is not None:
-            step["input_value"] = input_value
-        if operation_detail is not None:
-            step["operation_detail"] = operation_detail
-        if output_value is not None:
-            step["output_value"] = output_value
-        if mapped_to is not None:
-            step["mapped_to"] = mapped_to
-        self.steps.append(step)
+   
+    def __init__(self, generated_at: Optional[str] = None) -> None:
+        self._generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+        self._steps: List[Dict[str, Any]] = []
 
     def finalize(self) -> str:
-        if not self.trace_uuid:
-            self.trace_uuid = hashlib.sha256(
-                json.dumps(self.steps, sort_keys=True, default=str).encode()
-            ).hexdigest()
-        return hashlib.sha256(
-            json.dumps(self.steps, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        import hashlib
+        import json
 
-    def to_dict(self) -> Dict:
+        payload = self.to_dict() if hasattr(self, "to_dict") else {
+            "generated_at": getattr(self, "_generated_at", ""),
+            "steps": getattr(self, "_steps", []),
+        }
+        serialized = json.dumps(payload, sort_keys=True, default=str)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    @property
+    def generated_at(self) -> str:
+        return self._generated_at
+
+    def add_step(
+        self,
+        stage: str,
+        operation: str,
+        output_value: str,
+        operation_detail: Optional[str] = None,
+        mapped_to: Optional[str] = None,
+        input_entity: Optional[List[str]] = None
+    ) -> None:
+       
+        sanitized_input: Optional[List[str]] = None
+        if input_entity is not None:
+            if isinstance(input_entity, list):
+                sanitized_input = [str(e).strip() for e in input_entity if str(e).strip()]
+            else:
+                sanitized_input = [str(input_entity).strip()]
+
+        step_payload = {
+            "stage": TraceStageType(str(stage).strip().upper()),
+            "operation": str(operation).strip(),
+            "output_value": str(output_value).strip(),
+            "operation_detail": str(operation_detail).strip() if operation_detail is not None else None,
+            "mapped_to": str(mapped_to).strip() if mapped_to is not None else None,
+            "input_entity": sanitized_input
+        }
+               
+        validated_step = TraceStepDTO.model_validate(step_payload)
+        
+        self._steps.append(validated_step.model_dump(exclude_none=True))
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "trace_uuid": self.trace_uuid or self.finalize(),
-            "computation_steps": self.steps,
-            "audit_hash": self.finalize(),
-            "generated_at": self.generated_at
+            "generated_at": self._generated_at,
+            "computation_steps": list(self._steps),
         }

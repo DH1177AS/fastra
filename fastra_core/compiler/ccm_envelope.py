@@ -1,138 +1,347 @@
-"""
-ACES-200 CCM Envelope & Validator (diperkuat)
-"""
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-import uuid
+# fastra_core\compiler\ccm_envelope.py
+
+from __future__ import annotations
+
+import enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-def _is_valid_uuid(s):
-    try:
-        uuid.UUID(str(s))
-        return True
-    except (ValueError, AttributeError):
-        return False
+class ErrorCode(str, enum.Enum):
+   
+    LEX_001 = "LEX-001"  # Malformed object schema
+    LEX_002 = "LEX-002"  # Version mismatch
+    LEX_003 = "LEX-003"  # Missing mandatory meta type
+    LEX_004 = "LEX-004"  # Invalid cryptographic identifier (UUID)
+    LEX_005 = "LEX-005"  # Duplicate identifier collision
+    LEX_006 = "LEX-006"  # Coordinate syntax corruption
+    LEX_007 = "LEX-007"  # Geometry structural breakdown
+    GEO_001 = "GEO-001"  # Topological boundary loop violation
+    GEO_002 = "GEO-002"  # Non-physical engineering dimension
 
 
-def _validate_coordinate(coord: Any, entity_uid: str, errors: list):
-    """Validasi format coordinate: harus memiliki x, y, z numerik."""
-    if not isinstance(coord, dict):
-        errors.append({"error_code": "LEX-006", "message": f"Entity {entity_uid}: coordinate harus berupa dict"})
-        return
-    for axis in ("x", "y", "z"):
-        val = coord.get(axis)
-        if not isinstance(val, (int, float)):
-            errors.append({"error_code": "LEX-006", "message": f"Entity {entity_uid}: coordinate.{axis} harus numerik"})
+class EnvelopeEntityType(str, enum.Enum):
+    PHYSICAL = "Physical"
+    SPATIAL = "Spatial"
 
 
-@dataclass
+class EnvelopeElementSubtype(str, enum.Enum):
+    WALL = "Wall"
+    COLUMN = "Column"
+    BEAM = "Beam"
+    SLAB = "Slab"
+    FOUNDATION = "Foundation"
+    DOOR = "Door"
+    WINDOW = "Window"
+    ROOM = "Room"
+
+
+class EnvelopeRelationType(str, enum.Enum):
+    SUPPORTS = "SUPPORTS"
+    CONTAINS = "CONTAINS"
+    HOSTS = "HOSTS"
+    WALL_ADJACENT = "WALL_ADJACENT"
+
+
+# ---------------------------------------------------------------------------
+# Inbound DTOs – Pydantic Strict Gateway & Validation Matrix (Fail-Fast)
+# ---------------------------------------------------------------------------
+class EnvelopeCoordinateDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    x: float = Field(..., ge=-1e6, le=1e6, allow_inf_nan=False)
+    y: float = Field(..., ge=-1e6, le=1e6, allow_inf_nan=False)
+    z: float = Field(default=0.0, ge=-1e4, le=1e4, allow_inf_nan=False)
+
+
+class PointsContainerDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    points: List[EnvelopeCoordinateDTO] = Field(..., min_length=2, max_length=1000)
+
+
+class EnvelopeGeometryDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, strict=True)
+
+    axis_line: Optional[PointsContainerDTO] = None
+    boundary: Optional[PointsContainerDTO] = None
+    footprint: Optional[PointsContainerDTO] = None
+
+    height: Optional[float] = Field(default=None, gt=0.0, le=1000.0)
+    thickness: Optional[float] = Field(default=None, gt=0.0, le=10.0)
+    width: Optional[float] = Field(default=None, gt=0.0, le=100.0)
+    depth: Optional[float] = Field(default=None, gt=0.0, le=100.0)
+    length: Optional[float] = Field(default=None, gt=0.0, le=1000.0)
+    position: Optional[float] = Field(default=None, ge=0.0, le=5000.0)
+    sill_height: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+
+
+class EnvelopeEntityDTO(BaseModel):
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True, strict=True)
+
+    uuid: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+    )
+    entity_type: str = Field(..., min_length=1, max_length=64)
+    type: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=256)
+    geometry: EnvelopeGeometryDTO
+
+
+class EnvelopeRelationshipDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    source: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+    )
+    target: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+    )
+    type: str = Field(..., min_length=1, max_length=64)
+
+
+class CCMEnvelopeInboundDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    ccm_version: str = Field(..., min_length=5, max_length=16)
+    project_uuid: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+    )
+    entities: List[EnvelopeEntityDTO] = Field(..., max_length=50000)
+    relationships: List[EnvelopeRelationshipDTO] = Field(
+        default_factory=list, max_length=200000
+    )
+
+
+# ---------------------------------------------------------------------------
+# Domain Models – Pure Business & Geometrical Verification Envelope
+# ---------------------------------------------------------------------------
 class CCMEnvelope:
-    ccm_version: str
-    project_uuid: str
-    entities: List[Dict[str, Any]]
-    relationships: List[Dict[str, Any]] = field(default_factory=list)
+    
+    def __init__(
+        self,
+        ccm_version: str,
+        project_uuid: str,
+        entities: List[Dict[str, Any]],
+        relationships: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        self._ccm_version = ccm_version
+        self._project_uuid = project_uuid
+        self._raw_entities = list(entities)
+        self._raw_relationships = list(relationships or [])
+        self._errors: List[Dict[str, str]] = []
 
-    def validate(self):
-        errors = []
-        if self.ccm_version != "1.0.0":
-            errors.append({"error_code": "LEX-002", "message": "ccm_version must be 1.0.0"})
-        if not _is_valid_uuid(self.project_uuid):
-            errors.append({"error_code": "LEX-004", "message": "Invalid project_uuid"})
+    @property
+    def entities(self) -> List[Dict[str, Any]]:
+        return list(self._raw_entities)
 
-        seen_uuids = set()
-        for ent in self.entities:
-            if not isinstance(ent, dict):
-                errors.append({"error_code": "LEX-001", "message": "Entity harus berupa object"})
-                continue
-            ent_uuid = ent.get("uuid")
-            if ent_uuid is None:
-                errors.append({"error_code": "LEX-004", "message": "Entity missing uuid"})
-                continue
-            if not _is_valid_uuid(ent_uuid):
-                errors.append({"error_code": "LEX-004", "message": f"Invalid entity UUID: {ent_uuid}"})
-                continue
-            if ent_uuid in seen_uuids:
-                errors.append({"error_code": "LEX-005", "message": f"Duplicate UUID: {ent_uuid}"})
-            seen_uuids.add(ent_uuid)
+    @property
+    def relationships(self) -> List[Dict[str, Any]]:
+        return list(self._raw_relationships)
 
-            if "entity_type" not in ent:
-                errors.append({"error_code": "LEX-003", "message": f"Entity {ent_uuid} missing entity_type"})
-            if "type" not in ent:
-                errors.append({"error_code": "LEX-003", "message": f"Entity {ent_uuid} missing type"})
+    @property
+    def project_uuid(self) -> str:
+        return self._project_uuid
 
-            # Validasi geometri dasar per tipe
-            etype = ent.get("type")
-            geom = ent.get("geometry")
-            if not isinstance(geom, dict):
-                errors.append({"error_code": "LEX-007", "message": f"Entity {ent_uuid}: geometry harus dict"})
-                continue
+    @property
+    def ccm_version(self) -> str:
+        return self._ccm_version
+    
+    def validate(self) -> List[Dict[str, str]]:
+       
+        self._errors.clear()
+       
+        try:
+            validated_bundle = CCMEnvelopeInboundDTO(
+                ccm_version=self._ccm_version,
+                project_uuid=self._project_uuid,
+                entities=self._raw_entities,
+                relationships=self._raw_relationships,
+            )
+        except Exception as exc:
+            self._errors.append(
+                {
+                    "error_code": ErrorCode.LEX_001.value,
+                    "message": f"Kegagalan fatal parsing skema amplop dokumen: {str(exc)}",
+                }
+            )
+            return self._errors
+        
+        if validated_bundle.ccm_version != "1.0.0":
+            self._errors.append(
+                {
+                    "error_code": ErrorCode.LEX_002.value,
+                    "message": f"Versi '{validated_bundle.ccm_version}' tidak didukung. Wajib '1.0.0'.",
+                }
+            )
+       
+        seen_uuids: set[str] = set()
+        for ent in validated_bundle.entities:
+            if ent.uuid in seen_uuids:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.LEX_005.value,
+                        "message": f"Duplikasi UUID '{ent.uuid}' terdeteksi.",
+                    }
+                )
+            seen_uuids.add(ent.uuid)
 
-            if etype == "Wall":
-                axis = geom.get("axis_line", {})
-                if isinstance(axis, dict):
-                    points = axis.get("points", [])
-                    if not isinstance(points, list) or len(points) < 2:
-                        errors.append({"error_code": "LEX-006", "message": f"Wall {ent_uuid}: axis_line minimal 2 titik"})
-                    for p in points:
-                        _validate_coordinate(p, ent_uuid, errors)
-                else:
-                    errors.append({"error_code": "LEX-006", "message": f"Wall {ent_uuid}: axis_line harus dict"})
-                if "height" not in geom or not isinstance(geom["height"], (int, float)) or geom["height"] <= 0:
-                    errors.append({"error_code": "GEO-002", "message": f"Wall {ent_uuid}: height harus > 0"})
-                if "thickness" in geom and (not isinstance(geom["thickness"], (int, float)) or geom["thickness"] <= 0):
-                    errors.append({"error_code": "GEO-002", "message": f"Wall {ent_uuid}: thickness harus > 0"})
+            self._verify_element_geometry_invariants(ent)
+       
+        for rel in validated_bundle.relationships:
+            if rel.source not in seen_uuids:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.LEX_004.value,
+                        "message": f"Relasi source '{rel.source}' tidak terdaftar di entitas.",
+                    }
+                )
+            if rel.target not in seen_uuids:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.LEX_004.value,
+                        "message": f"Relasi target '{rel.target}' tidak terdaftar di entitas.",
+                    }
+                )
+            if rel.source == rel.target:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.LEX_001.value,
+                        "message": f"Relasi sirkular pada '{rel.source}' dilarang.",
+                    }
+                )
 
-            elif etype == "Column":
-                for dim in ("width", "depth", "height"):
-                    if dim not in geom or not isinstance(geom[dim], (int, float)) or geom[dim] <= 0:
-                        errors.append({"error_code": "GEO-002", "message": f"Column {ent_uuid}: {dim} harus > 0"})
+        return list(self._errors)
 
-            elif etype == "Beam":
-                for dim in ("width", "depth", "length"):
-                    if dim not in geom or not isinstance(geom[dim], (int, float)) or geom[dim] <= 0:
-                        errors.append({"error_code": "GEO-002", "message": f"Beam {ent_uuid}: {dim} harus > 0"})
+    def _verify_element_geometry_invariants(self, entity: EnvelopeEntityDTO) -> None:
+        etype = entity.type
+        geom = entity.geometry
 
-            elif etype == "Slab":
-                if "thickness" not in geom or not isinstance(geom["thickness"], (int, float)) or geom["thickness"] <= 0:
-                    errors.append({"error_code": "GEO-002", "message": f"Slab {ent_uuid}: thickness harus > 0"})
-                boundary = geom.get("boundary", {})
-                if isinstance(boundary, dict):
-                    pts = boundary.get("points", [])
-                    if not isinstance(pts, list) or len(pts) < 4:
-                        errors.append({"error_code": "GEO-001", "message": f"Slab {ent_uuid}: boundary minimal 4 titik"})
-                    for p in pts:
-                        _validate_coordinate(p, ent_uuid, errors)
-                else:
-                    errors.append({"error_code": "GEO-001", "message": f"Slab {ent_uuid}: boundary harus dict"})
+        if etype == "Wall":
+            if geom.axis_line is None or len(geom.axis_line.points) < 2:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_001.value,
+                    "message": f"Wall '{entity.uuid}': axis_line minimal 2 titik.",
+                })
+            if geom.height is None or geom.height <= 0.0:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_002.value,
+                    "message": f"Wall '{entity.uuid}': height wajib positif.",
+                })
+            if geom.thickness is None or geom.thickness <= 0.0:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_002.value,
+                    "message": f"Wall '{entity.uuid}': thickness wajib positif.",
+                })
 
-            elif etype == "Door" or etype == "Window":
-                for dim in ("width", "height"):
-                    if dim not in geom or not isinstance(geom[dim], (int, float)) or geom[dim] <= 0:
-                        errors.append({"error_code": "GEO-002", "message": f"{etype} {ent_uuid}: {dim} harus > 0"})
-                if "position" in geom and geom["position"] < 0:
-                    errors.append({"error_code": "GEO-002", "message": f"{etype} {ent_uuid}: position tidak boleh negatif"})
+        elif etype == "Column":
+            for dim_name, dim_val in [("width", geom.width), ("depth", geom.depth), ("height", geom.height)]:
+                if dim_val is None or dim_val <= 0.0:
+                    self._errors.append({
+                        "error_code": ErrorCode.GEO_002.value,
+                        "message": f"Column '{entity.uuid}': {dim_name} wajib positif.",
+                    })
 
-            elif etype == "Room":
-                boundary = geom.get("boundary", {})
-                if isinstance(boundary, dict):
-                    pts = boundary.get("points", [])
-                    if not isinstance(pts, list) or len(pts) < 4:
-                        errors.append({"error_code": "GEO-001", "message": f"Room {ent_uuid}: boundary minimal 4 titik"})
-                    for p in pts:
-                        _validate_coordinate(p, ent_uuid, errors)
-                else:
-                    errors.append({"error_code": "GEO-001", "message": f"Room {ent_uuid}: boundary harus dict"})
+        elif etype == "Beam":
+            for dim_name, dim_val in [("width", geom.width), ("depth", geom.depth), ("length", geom.length)]:
+                if dim_val is None or dim_val <= 0.0:
+                    self._errors.append({
+                        "error_code": ErrorCode.GEO_002.value,
+                        "message": f"Beam '{entity.uuid}': {dim_name} wajib positif.",
+                    })
 
-        # Validasi relationship
-        for rel in self.relationships:
-            if not isinstance(rel, dict):
-                errors.append({"error_code": "LEX-001", "message": "Relationship harus dict"})
-                continue
-            if "source" not in rel or not _is_valid_uuid(rel.get("source")):
-                errors.append({"error_code": "LEX-004", "message": f"Relationship invalid source: {rel.get('source')}"})
-            if "target" not in rel or not _is_valid_uuid(rel.get("target")):
-                errors.append({"error_code": "LEX-004", "message": f"Relationship invalid target: {rel.get('target')}"})
-            if "type" not in rel:
-                errors.append({"error_code": "LEX-003", "message": "Relationship missing type"})
+        elif etype == "Slab":
+            if geom.thickness is None or geom.thickness <= 0.0:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_002.value,
+                    "message": f"Slab '{entity.uuid}': thickness wajib positif.",
+                })
+            if geom.boundary is None or len(geom.boundary.points) < 4:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_001.value,
+                    "message": f"Slab '{entity.uuid}': boundary minimal 4 titik.",
+                })
 
-        return errors
+        elif etype == "Foundation":
+            if geom.footprint is None or len(geom.footprint.points) < 4:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_001.value,
+                    "message": f"Foundation '{entity.uuid}': footprint minimal 4 titik.",
+                })
+            if geom.depth is None or geom.depth <= 0.0:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_002.value,
+                    "message": f"Foundation '{entity.uuid}': depth wajib positif.",
+                })
+
+        elif etype in ("Door", "Window"):
+            for dim_name, dim_val in [("width", geom.width), ("height", geom.height)]:
+                if dim_val is None or dim_val <= 0.0:
+                    self._errors.append({
+                        "error_code": ErrorCode.GEO_002.value,
+                        "message": f"{etype} '{entity.uuid}': {dim_name} wajib positif.",
+                    })
+
+        elif etype == "Room":
+            if geom.boundary is None or len(geom.boundary.points) < 4:
+                self._errors.append({
+                    "error_code": ErrorCode.GEO_001.value,
+                    "message": f"Room '{entity.uuid}': boundary minimal 4 titik.",
+                })
+
+        elif etype == EnvelopeElementSubtype.FOUNDATION:
+            if geom.footprint is None or len(geom.footprint.points) < 4:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.GEO_001.value,
+                        "message": f"Foundation '{entity.uuid}': footprint minimal 4 titik.",
+                    }
+                )
+            if geom.depth is None or geom.depth <= 0.0:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.GEO_002.value,
+                        "message": f"Foundation '{entity.uuid}': depth wajib positif.",
+                    }
+                )
+
+        elif etype in (
+            EnvelopeElementSubtype.DOOR,
+            EnvelopeElementSubtype.WINDOW,
+        ):
+            for dim_name, dim_val in [
+                ("width", geom.width),
+                ("height", geom.height),
+            ]:
+                if dim_val is None or dim_val <= 0.0:
+                    self._errors.append(
+                        {
+                            "error_code": ErrorCode.GEO_002.value,
+                            "message": f"{etype.value} '{entity.uuid}': {dim_name} wajib positif.",
+                        }
+                    )
+
+        elif etype == EnvelopeElementSubtype.ROOM:
+            if geom.boundary is None or len(geom.boundary.points) < 4:
+                self._errors.append(
+                    {
+                        "error_code": ErrorCode.GEO_001.value,
+                        "message": f"Room '{entity.uuid}': boundary minimal 4 titik.",
+                    }
+                )

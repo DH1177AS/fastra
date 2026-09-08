@@ -1,36 +1,109 @@
+# fastra_core\compiler\geometry_builder.py
 
-"""
-Stage 3: Geometry Builder - Validasi geometri & gross quantity.
-"""
-from typing import Dict, Any
-from fastra_core.ccm.physical import Wall, Column, Beam, Slab, Foundation, Roof
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List
+
+from fastra_core.ccm.physical import (
+    Beam,
+    Column,
+    Foundation,
+    Roof,
+    Slab,
+    Wall,
+)
+
+logger = logging.getLogger(__name__)
+
 
 class GeometryBuilder:
-    def __init__(self):
-        self.errors = []
-        self.warnings = []
+    def __init__(self) -> None:
+        self._errors: List[Dict[str, Any]] = []
+        self._warnings: List[Dict[str, Any]] = []
 
-    def validate(self, entities: Dict[str, Any]):
+    @property
+    def warnings(self) -> List[Dict[str, Any]]:
+        return list(self._warnings)
+
+    def validate(self, entities: Dict[str, Any]) -> List[Dict[str, Any]]:
+        self._errors.clear()
+        self._warnings.clear()
+
         for uid, ent in entities.items():
             try:
-                if isinstance(ent, Wall):
-                    if ent.gross_area.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Wall area nol"})
-                elif isinstance(ent, Column):
-                    if ent.volume.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Column volume nol"})
-                elif isinstance(ent, Beam):
-                    if ent.volume.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Beam volume nol"})
-                elif isinstance(ent, Slab):
-                    if ent.area.value <= 0 or ent.volume.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Slab area/volume nol"})
-                elif isinstance(ent, Foundation):
-                    if ent.volume.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Foundation volume nol"})
-                elif isinstance(ent, Roof):
-                    if ent.area.value <= 0:
-                        self.errors.append({"error_code": "GEO-003", "entity_uuid": uid, "message": "Roof area nol"})
-            except Exception as ex:
-                self.errors.append({"error_code": "GEO-001", "entity_uuid": uid, "message": str(ex)})
-        return self.errors
+                self._validate_single_entity(uid, ent)
+            except Exception as exc:
+                logger.exception("Gagal memvalidasi entitas %s", uid)
+                self._errors.append({
+                    "error_code": "GEO-001",
+                    "message": f"Crash saat validasi entitas {uid}: {str(exc)}",
+                })
+
+        return self._errors
+
+    def _validate_single_entity(self, uid: str, ent: Any) -> None:
+        if isinstance(ent, Wall):
+            try:
+                gross_area = float(ent.calculate_gross_area().value)
+            except Exception:
+                gross_area = 0.0
+            if gross_area <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Wall area nol atau negatif (entity: {uid})",
+                })
+        elif isinstance(ent, Column):
+            try:
+                volume = float(ent.calculate_volume().value)
+            except Exception:
+                volume = 0.0
+            if volume <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Column volume nol atau negatif (entity: {uid})",
+                })
+        elif isinstance(ent, Beam):
+            try:
+                volume = float(ent.calculate_volume().value)
+            except Exception:
+                volume = 0.0
+            if volume <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Beam volume nol atau negatif (entity: {uid})",
+                })
+        elif isinstance(ent, Slab):
+            try:
+                area = float(ent.calculate_area().value)
+                volume = float(ent.calculate_volume().value)
+            except Exception:
+                area = 0.0
+                volume = 0.0
+            if area <= 0 or volume <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Slab area/volume nol atau negatif (entity: {uid})",
+                })
+        elif isinstance(ent, Foundation):
+            try:
+                volume = float(ent.calculate_volume().value)
+            except Exception:
+                volume = 0.0
+            if volume <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Foundation volume nol atau negatif (entity: {uid})",
+                })
+        elif isinstance(ent, Roof):
+            try:
+                area = float(ent.calculate_projected_area().value)
+            except Exception:
+                area = 0.0
+            if area <= 0:
+                self._errors.append({
+                    "error_code": "GEO-003",
+                    "message": f"Roof area nol atau negatif (entity: {uid})",
+                })
+        else:
+            logger.debug("Entitas %s dengan tipe %s dilewati oleh GeometryBuilder", uid, type(ent).__name__)

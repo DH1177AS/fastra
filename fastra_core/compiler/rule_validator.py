@@ -1,43 +1,117 @@
-﻿"""
-Stage 6: Rule Validator - Aturan konstruksi standar + SPA & QTY.
-Mendukung custom rules sesuai ACES-400 Â§11.3.
-"""
+﻿# fastra_core/compiler/rule_validator.py
+
+from __future__ import annotations
+
 import ast
-from typing import Dict, Any, List, Optional
-from fastra_core.ccm.physical import Beam, Column, Slab, Door, Window
+import enum
+import logging
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from fastra_core.ccm.physical import (
+    Beam,
+    Column,
+    Door,
+    Foundation,
+    Roof,
+    Slab,
+    Wall,
+    Window,
+)
 from fastra_core.ccm.spatial import Room
+
+logger = logging.getLogger(__name__)
+
+
+class RuleValidationCode(str, enum.Enum):
+    RULE_STR_001 = "RULE-STR-001"
+    RULE_STR_002 = "RULE-STR-002"
+    RULE_STR_003 = "RULE-STR-003"
+    RULE_STR_004 = "RULE-STR-004"
+    RULE_QTY_001 = "RULE-QTY-001"
+    RULE_QTY_002 = "RULE-QTY-002"
+    RULE_SPA_001 = "RULE-SPA-001"
+    RULE_SPA_002 = "RULE-SPA-002"
+    RULE_SPA_003 = "RULE-SPA-003"
+    RULE_ARC_001 = "RULE-ARC-001"
+
+
+class RuleLogDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    warning_code: str = Field(..., min_length=2, max_length=16)
+    entity_uuid: str = Field(
+        ...,
+        min_length=5,
+        max_length=64,
+        pattern=r"^[a-f0-9\-]{36}|[A-Za-z0-9_]+$",
+    )
+    message: str = Field(..., min_length=5, max_length=512)
+
+def _to_decimal(value: float | int | Decimal, field_name: str) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Field '{field_name}' wajib bertipe numerik dasar (int/float/Decimal).")
+    try:
+        return Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError(
+            f"Field '{field_name}' gagal dikonversi ke representasi Decimal imutabel."
+        ) from exc
 
 
 class RuleValidator:
-    def __init__(self, custom_rules: Optional[List[Dict[str, Any]]] = None):
-        self.errors: List[Dict[str, Any]] = []
-        self.warnings: List[Dict[str, Any]] = []
-        self.custom_rules = custom_rules or []
+    def __init__(self, custom_rules: Optional[List[Dict[str, Any]]] = None) -> None:
+        self._errors: List[Dict[str, Any]] = []
+        self._warnings: List[Dict[str, Any]] = []
+        self._custom_rules = custom_rules or []
 
+    @property
+    def errors(self) -> List[Dict[str, Any]]:
+        return list(self._errors)
 
+    @property
+    def warnings(self) -> List[Dict[str, Any]]:
+        return list(self._warnings)
+
+    @property
+    def custom_rules(self) -> List[Dict[str, Any]]:
+        return list(self._custom_rules)
 
     @staticmethod
     def _evaluate_condition_safe(condition: str, context: Dict[str, Any]) -> bool:
-        """Evaluasi ekspresi boolean sederhana tanpa eval/exec.
-
-        Hanya mengizinkan struktur: Bandingkan, UnaryOp (Not), BoolOp (And/Or),
-        Name (variabel yang diambil dari context), Constant, dan Attribute sederhana.
-        """
-        if not condition:
+        if not condition or not condition.strip():
             return False
         try:
-            tree = ast.parse(condition, mode="eval")
+            tree = ast.parse(condition.strip(), mode="eval")
         except SyntaxError:
             return False
 
         allowed_node_types = (
-            ast.Expression, ast.BoolOp, ast.UnaryOp, ast.Not, ast.Compare,
-            ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
-            ast.Constant, ast.Name, ast.Load, ast.And, ast.Or,
-            ast.Attribute, ast.Subscript, ast.Index, ast.Tuple, ast.List
+            ast.Expression,
+            ast.BoolOp,
+            ast.UnaryOp,
+            ast.Not,
+            ast.Compare,
+            ast.Eq,
+            ast.NotEq,
+            ast.Lt,
+            ast.LtE,
+            ast.Gt,
+            ast.GtE,
+            ast.Constant,
+            ast.Name,
+            ast.Load,
+            ast.And,
+            ast.Or,
+            ast.Attribute,
+            ast.Subscript,
         )
 
-        def _eval(node):
+        def _eval(node: Any) -> Any:
             if isinstance(node, ast.Expression):
                 return _eval(node.body)
             if isinstance(node, ast.Constant):
@@ -60,13 +134,20 @@ class RuleValidator:
                 left = _eval(node.left)
                 for op, comparator in zip(node.ops, node.comparators):
                     right = _eval(comparator)
-                    if isinstance(op, ast.Eq): result = (left == right)
-                    elif isinstance(op, ast.NotEq): result = (left != right)
-                    elif isinstance(op, ast.Lt): result = (left < right)
-                    elif isinstance(op, ast.LtE): result = (left <= right)
-                    elif isinstance(op, ast.Gt): result = (left > right)
-                    elif isinstance(op, ast.GtE): result = (left >= right)
-                    else: return False
+                    if isinstance(op, ast.Eq):
+                        result = left == right
+                    elif isinstance(op, ast.NotEq):
+                        result = left != right
+                    elif isinstance(op, ast.Lt):
+                        result = left < right
+                    elif isinstance(op, ast.LtE):
+                        result = left <= right
+                    elif isinstance(op, ast.Gt):
+                        result = left > right
+                    elif isinstance(op, ast.GtE):
+                        result = left >= right
+                    else:
+                        return False
                     if not result:
                         return False
                     left = right
@@ -76,9 +157,12 @@ class RuleValidator:
                 return getattr(obj, node.attr, False)
             if isinstance(node, ast.Subscript):
                 value = _eval(node.value)
-                index = _eval(node.slice)
+                if hasattr(node.slice, "value"):
+                    idx = node.slice.value
+                else:
+                    idx = _eval(node.slice)
                 try:
-                    return value[index]
+                    return value[idx]
                 except Exception:
                     return False
             return False
@@ -86,141 +170,217 @@ class RuleValidator:
         for n in ast.walk(tree):
             if not isinstance(n, allowed_node_types):
                 return False
-        return bool(_eval(tree))
+        try:
+            return bool(_eval(tree))
+        except Exception:
+            return False
 
-    def validate(self, entities: Dict[str, Any], adjacency: Dict[str, list]):
-        total_room_area = 0.0
-        total_window_area = 0.0
+    def validate(
+        self,
+        entities: Dict[str, Any],
+        adjacency: Dict[str, List[Tuple[str, str]]],
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        self._errors.clear()
+        self._warnings.clear()
 
-        # Buat mapping room -> windows dari adjacency (relasi CONTAINS/HOSTS)
-        room_windows: Dict[str, List[Any]] = {uid: [] for uid, ent in entities.items() if isinstance(ent, Room)}
+        total_room_area = Decimal("0.0000")
+        total_window_area = Decimal("0.0000")
+
+        room_windows: Dict[str, List[Any]] = {}
+        for uid, ent in entities.items():
+            if isinstance(ent, Room):
+                room_windows[uid] = []
         for uid, ent in entities.items():
             if isinstance(ent, Window):
-                # Cari room yang mengandung window melalui relasi CONTAINS atau HOSTS
-                for rel_type, target_id in adjacency.get(uid, []):
+                for rel_type, target_id in adjacency.get(uid, []) or []:
                     if rel_type in ("CONTAINS", "HOSTS") and target_id in room_windows:
                         room_windows[target_id].append(ent)
                         break
 
         for uid, ent in entities.items():
-            if isinstance(ent, Beam):
-                if ent.length.value > 1.5:
-                    self.warnings.append({
-                        "warning_code": "RULE-STR-004",
-                        "entity_uuid": uid,
-                        "message": "Cantilever > 1.5m"
-                    })
-            elif isinstance(ent, Column):
-                if not any(rel in ("SUPPORTS", "CONNECTED_TO") for rel, _ in adjacency.get(uid, [])):
-                    self.warnings.append({
-                        "warning_code": "RULE-STR-002",
-                        "entity_uuid": uid,
-                        "message": "Column may lack foundation"
-                    })
-                               # RULE-QTY-002: rasio tulangan (perkiraan)
-                vol = ent.volume.value
-                if vol > 0:
-                    if ent.reinforcement:
-                        # Asumsikan berat jenis baja 7850 kg/m3, volume tulangan = luas penampang Ã— panjang
-                        # untuk kolom: gunakan rasio volume tulangan terhadap volume kolom
-                        main_diameter_m = ent.reinforcement.main_diameter.value / 1000.0
-                        area_steel = (3.14159 / 4) * (main_diameter_m ** 2) * ent.reinforcement.main_quantity
-                        # estimasi panjang tulangan sama dengan tinggi kolom (sederhana)
-                        steel_volume = area_steel * ent.height.value
-                        ratio = steel_volume / vol
-                        if not (0.01 <= ratio <= 0.08):
-                            self.warnings.append({
-                                "warning_code": "RULE-QTY-002",
-                                "entity_uuid": uid,
-                                "message": f"Reinforcement ratio {ratio:.4f} out of range"
-                            })
+            try:
+                if isinstance(ent, Beam):
+                    self._validate_beam(uid, ent)
+                elif isinstance(ent, Column):
+                    self._validate_column(uid, ent, adjacency)
+                elif isinstance(ent, Slab):
+                    self._validate_slab(uid, ent, adjacency)
+                elif isinstance(ent, Foundation):
+                    self._validate_foundation(uid, ent)
+                elif isinstance(ent, Wall):
+                    self._validate_wall(uid, ent)
+                elif isinstance(ent, Door):
+                    self._validate_door(uid, ent)
+                elif isinstance(ent, Window):
+                    self._validate_window(uid, ent)
+                elif isinstance(ent, Room):
+                    area = ent.calculate_room_area()
+                    total_room_area += area
+                    self._validate_room(uid, ent, area)
+            except Exception as exc:
+                logger.exception("Gagal memvalidasi entitas %s", uid)
+                self._add_error_log(
+                    RuleValidationCode.RULE_STR_001,
+                    uid,
+                    f"Kegagalan evaluasi regulasi: {exc}",
+                )
+
+        if total_room_area > Decimal("0"):
+            for uid, ent in entities.items():
+                if isinstance(ent, Window):
+                    total_window_area += _to_decimal(ent.calculate_area().value, "window.area")
+            ratio = total_window_area / total_room_area
+            if ratio < Decimal("0.10"):
+                self._add_error_log(
+                    RuleValidationCode.RULE_SPA_003,
+                    "GLOBAL",
+                    f"Rasio ventilasi alami {float(ratio * 100):.2f}% di bawah ambang batas 10%.",
+                )
+
+        for rule in self._custom_rules:
+            condition = rule.get("condition", "")
+            context = rule.get("context", {})
+            context.setdefault("entities", entities)
+            try:
+                if self._evaluate_condition_safe(condition, context):
+                    severity = rule.get("severity", "warning")
+                    code_value = rule.get("code", "RULE-STR-001")
+                    try:
+                        code_enum = RuleValidationCode(code_value)
+                    except ValueError:
+                        code_enum = RuleValidationCode.RULE_STR_001
+                    message = rule.get("message", "Custom rule violation")
+                    entity_id = rule.get("entity_uuid", "GLOBAL")
+                    if severity == "error":
+                        self._add_error_log(code_enum, entity_id, message)
                     else:
-                        self.warnings.append({
-                            "warning_code": "RULE-QTY-002",
-                            "entity_uuid": uid,
-                            "message": "Reinforcement data not available; ratio assumed 0.02"
-                        })
-            elif isinstance(ent, Slab):
-                if len(getattr(ent, "supports", [])) < 3:
-                    self.warnings.append({
-                        "warning_code": "RULE-STR-003",
-                        "entity_uuid": uid,
-                        "message": "Slab supports < 3"
-                    })
-                if ent.volume.value <= 0:
-                    self.errors.append({
-                        "error_code": "RULE-QTY-001",
-                        "entity_uuid": uid,
-                        "message": "Concrete volume non-zero required"
-                    })
-            elif isinstance(ent, Room):
-                total_room_area += ent.area.value
-                min_area = {"BEDROOM": 9.0, "BATHROOM": 3.0}
-                req = min_area.get(ent.room_type.upper(), 0)
-                if ent.area.value < req:
-                    self.warnings.append({
-                        "warning_code": "RULE-SPA-001",
-                        "entity_uuid": uid,
-                        "message": f"Room area < {req}mÂ²"
-                    })
+                        self._add_log(code_enum, entity_id, message)
+            except Exception as exc:
+                logger.warning("Gagal evaluasi custom rule: %s", exc)
 
-                # RULE-SPA-003 per-room
-                win_area = sum(w.area.value for w in room_windows.get(uid, []))
-                total_window_area += win_area
-                if ent.area.value > 0 and win_area < 0.1 * ent.area.value:
-                    self.warnings.append({
-                        "warning_code": "RULE-SPA-003",
-                        "entity_uuid": uid,
-                        "message": f"Window area {win_area:.2f}mÂ² < 10% room area {ent.area.value:.2f}mÂ²"
-                    })
-            elif isinstance(ent, Door):
-                if ent.door_type == "MAIN_ENTRANCE" and ent.width.value < 0.8:
-                    self.warnings.append({
-                        "warning_code": "RULE-SPA-002",
-                        "entity_uuid": uid,
-                        "message": "Door width < 0.8m"
-                    })
-            elif isinstance(ent, Window):
-                total_window_area += ent.area.value
-                # RULE-SPA-003 global fallback jika tidak ada room
-                # (akan ditangani juga di Room loop)
+        return self._errors, self._warnings
 
-        # Jika tidak ada Room, gunakan global check
-        if not any(isinstance(ent, Room) for ent in entities.values()):
-            if total_room_area > 0 and total_window_area < 0.1 * total_room_area:
-                self.warnings.append({
-                    "warning_code": "RULE-SPA-003",
-                    "entity_uuid": "GLOBAL",
-                    "message": f"Window area {total_window_area:.2f}mÂ² < 10% room area {total_room_area:.2f}mÂ²"
-                })
+    # ------------------------------------------------------------------
+    # Metode validasi per tipe entitas
+    # ------------------------------------------------------------------
+    def _validate_beam(self, uid: str, ent: Beam) -> None:
+        length = ent.length.value  # Decimal
+        if length > Decimal("1.5"):
+            self._add_log(
+                RuleValidationCode.RULE_STR_004,
+                uid,
+                f"Panjang kantilever balok {float(length):.2f}m melampaui ambang batas aman 1.5m.",
+            )
 
-        # Evaluasi custom rules (jika ada)
-        for rule in self.custom_rules:
-            rule_id = rule.get("rule_id", "CUSTOM")
-            severity = rule.get("severity", "WARNING")
-            description = rule.get("description", "Custom rule")
-            condition = rule.get("condition", None)
+    def _validate_column(self, uid: str, ent: Column, adjacency: Dict[str, List[Tuple[str, str]]]) -> None:
+        edges = adjacency.get(uid, []) or []
+        has_support = any(rel in ("SUPPORTS", "CONNECTED_TO") for rel, _ in edges)
+        if not has_support:
+            self._add_log(
+                RuleValidationCode.RULE_STR_002,
+                uid,
+                "Kolom berpotensi melayang bebas (tanpa dukungan pondasi).",
+            )
 
-            # Evaluasi kondisi sederhana; jika tidak ada kondisi, dianggap False
-            ok = False
-            if condition:
-                try:
-                    ok = self._evaluate_condition_safe(condition, {"entities": entities, "adjacency": adjacency})
-                except Exception:
-                    ok = False
+        volume = ent.calculate_volume().value
+        if volume > Decimal("0"):
+            reinforcement = getattr(ent, "_reinforcement", None)
+            if reinforcement:
+                main_dia = _to_decimal(
+                    getattr(reinforcement, "_main_diameter", 0.0), "main_diameter"
+                )
+                main_qty = int(getattr(reinforcement, "_main_quantity", 0))
+                if main_dia > 0 and main_qty > 0:
+                    area_steel = (Decimal("3.1415926535") / Decimal("4.00")) * (main_dia ** 2) * Decimal(main_qty)
+                    height = ent.height.value
+                    steel_volume = area_steel * height
+                    ratio = steel_volume / volume
+                    if not (Decimal("0.01") <= ratio <= Decimal("0.08")):
+                        self._add_error_log(
+                            RuleValidationCode.RULE_QTY_002,
+                            uid,
+                            f"Rasio volume baja tulangan kolom {float(ratio * 100):.2f}% di luar ambang batas 1%-8%.",
+                        )
 
-            if ok:
-                continue  # Rule terpenuhi, tidak ada pelanggaran
+    def _validate_slab(self, uid: str, ent: Slab, adjacency: Dict[str, List[Tuple[str, str]]]) -> None:
+        edges = adjacency.get(uid, []) or []
+        has_support = any(rel == "SUPPORTS" for rel, _ in edges)
+        if not has_support:
+            self._add_error_log(
+                RuleValidationCode.RULE_STR_003,
+                uid,
+                "Plat lantai kekurangan tumpuan lateral (tidak ada relasi SUPPORTS).",
+            )
 
-            entry = {
-                "warning_code": rule_id if severity != "ERROR" else "ERROR",
-                "entity_uuid": rule.get("entity_uuid", "GLOBAL"),
-                "message": description
-            }
-            if severity == "ERROR":
-                entry["error_code"] = rule_id
-                self.errors.append(entry)
-            else:
-                self.warnings.append(entry)
+        volume = ent.calculate_volume().value
+        if volume <= Decimal("0"):
+            self._add_error_log(
+                RuleValidationCode.RULE_QTY_001,
+                uid,
+                "Volume beton plat lantai bernilai nol.",
+            )
 
-        return self.errors, self.warnings
+    def _validate_foundation(self, uid: str, ent: Foundation) -> None:
+        volume = ent.calculate_volume().value
+        if volume <= Decimal("0"):
+            self._add_error_log(
+                RuleValidationCode.RULE_QTY_001,
+                uid,
+                "Volume pondasi bernilai nol.",
+            )
+
+    def _validate_wall(self, uid: str, ent: Wall) -> None:
+        area = ent.calculate_gross_area().value
+        if area <= Decimal("0"):
+            self._add_error_log(
+                RuleValidationCode.RULE_QTY_001,
+                uid,
+                "Luas dinding bernilai nol.",
+            )
+
+    def _validate_door(self, uid: str, ent: Door) -> None:
+        width = ent.width.value
+        if width < Decimal("0.80"):
+            self._add_log(
+                RuleValidationCode.RULE_SPA_002,
+                uid,
+                f"Lebar pintu {float(width):.2f}m di bawah ambang batas 0.80m untuk aksesibilitas.",
+            )
+
+    def _validate_window(self, uid: str, ent: Window) -> None:
+        pass
+
+    def _validate_room(self, uid: str, ent: Room, area: Decimal) -> None:
+        if area < Decimal("9.0"):
+            self._add_log(
+                RuleValidationCode.RULE_SPA_001,
+                uid,
+                f"Luas ruangan {float(area):.2f}m² kurang dari minimal 9.0m².",
+            )
+
+    # ------------------------------------------------------------------
+    # Pencatatan log
+    # ------------------------------------------------------------------
+    def _add_log(self, code: RuleValidationCode, entity_uuid: str, msg: str) -> None:
+        log_payload = {
+            "warning_code": code.value,
+            "entity_uuid": entity_uuid,
+            "message": msg,
+        }
+        try:
+            validated_log = RuleLogDTO.model_validate(log_payload)
+            self._warnings.append(validated_log.model_dump())
+        except Exception as exc:
+            logger.warning("Gagal membungkus warning: %s", exc)
+
+    def _add_error_log(self, code: RuleValidationCode, entity_uuid: str, msg: str) -> None:
+        log_payload = {
+            "warning_code": code.value,
+            "entity_uuid": entity_uuid,
+            "message": msg,
+        }
+        try:
+            validated_log = RuleLogDTO.model_validate(log_payload)
+            self._warnings.append(validated_log.model_dump())
+        except Exception as exc:
+            logger.warning("Gagal membungkus warning: %s", exc)

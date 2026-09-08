@@ -1,28 +1,35 @@
-﻿fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.5.0
+﻿# =========================================================================
+# FASTRA SECURITY ARCHITECTURE - PRODUCTION DEPENDENCIES (LOCKED)
+# =========================================================================
+# File ini hanya untuk production. Alat pengembangan dipisahkan ke requirements-dev.txt
+# Semua versi dikunci untuk mencegah supply chain attack.
+# Jangan gunakan passlib / python-jose (deprecated & rentan).
 
-# Development & Testing
-hypothesis>=6.0
-mypy>=1.0
-pylint>=3.0
-bandit>=1.7
-redis
-redis
+# --- WEB & API RUNTIME ---
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+pydantic==2.10.6
 
-sqlalchemy
-psycopg2-binary
-pyjwt
-bcrypt
-python-dotenv
-python-multipart
+# --- AUTHENTICATION & CRYPTOGRAPHY ---
+# bcrypt untuk password hashing (sudah digunakan di auth_secure.py)
+bcrypt==4.2.1
+# PyJWT untuk JWT
+pyjwt==2.10.1
+# cryptography untuk backend kriptografi
+cryptography==44.0.1
+# python-multipart untuk parsing OAuth2PasswordRequestForm
+python-multipart==0.0.20
 
-passlib[argon2]
-python-jose
-cryptography
-loguru
-slowapi
-qrcode
-pyotp
-pillow
-aiosqlite
+# --- DATABASE & CACHE ---
+sqlalchemy==2.0.38
+psycopg2-binary==2.9.10
+aiosqlite==0.20.0
+redis==5.2.1
+
+# --- UTILITIES ---
+python-dotenv==1.0.1
+loguru==0.7.3
+slowapi==0.1.9
+qrcode==8.0
+pyotp==2.9.0
+pillow==11.1.0

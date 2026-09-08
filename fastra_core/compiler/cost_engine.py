@@ -1,17 +1,26 @@
-"""
-ACES-500 Cost Engine
-Menerjemahkan BOQ menjadi RAB lengkap dengan traceability.
-"""
-from typing import Optional, Dict, Any, List
-import json
-from fastra_core.knowledge.graph import KnowledgeGraph
+# fastra_core\compiler\cost_engine.py
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List, Optional
+
 from fastra_core.compiler.trace import TraceLog
+from fastra_core.knowledge.graph import KnowledgeGraph
+
+logger = logging.getLogger(__name__)
+
 
 class CostEngine:
-    def __init__(self, kg: KnowledgeGraph, config: Optional[Dict[str, Any]] = None):
-        self.kg = kg
-        self._wi_by_code: Dict[str, Any] = {wi.code: wi for wi in self.kg.work_items.values()}
+   
+    def __init__(self, kg: KnowledgeGraph, config: Optional[Dict[str, Any]] = None) -> None:
+        if not isinstance(kg, KnowledgeGraph):
+            raise TypeError("kg harus berupa instance KnowledgeGraph")
 
+        self.kg = kg
+       
+        self._wi_by_code: Dict[str, Any] = {wi.code: wi for wi in self.kg.work_items.values()}
+       
         default_config: Dict[str, Any] = {
             "overhead_pct": 10.0,
             "profit_pct": 10.0,
@@ -31,15 +40,17 @@ class CostEngine:
             "include_smkk": False,
             "contract_value": None,
         }
-        user_config = config or {}
+
+        # Gabungkan dengan konfigurasi pengguna (jika ada)
         if config:
-            merged = default_config.copy()
-            merged.update(config)
-            self.config: Dict[str, Any] = merged
+           
+            if not isinstance(config, dict):
+                raise TypeError("config harus berupa dictionary")
+            self.config: Dict[str, Any] = {**default_config, **config}
         else:
             self.config = default_config
-
-        # Override dari knowledge graph jika user tidak mensuplai
+        
+        user_config = config or {}
         if "ppn_pct" not in user_config and hasattr(self.kg, "ppn_rate"):
             self.config["ppn_pct"] = float(self.kg.ppn_rate) * 100
         if "pph_pct" not in user_config and hasattr(self.kg, "pph_rate"):
@@ -48,61 +59,49 @@ class CostEngine:
             self.config["risk_register"] = self.kg.risk_register
         if "schedule_weights" not in user_config and hasattr(self.kg, "schedule_weights"):
             self.config["schedule_weights"] = self.kg.schedule_weights
-
+       
         self._validate_config()
 
     def _validate_config(self) -> None:
-        overhead_pct = float(self.config["overhead_pct"])
-        profit_pct = float(self.config["profit_pct"])
-        contingency_pct = float(self.config["contingency_pct"])
-        if not (2.0 <= overhead_pct <= 25.0):
-            raise ValueError("overhead_pct harus antara 2% dan 25%")
-        if not (5.0 <= profit_pct <= 25.0):
-            raise ValueError("profit_pct harus antara 5% dan 25%")
-        if not (1.0 <= contingency_pct <= 15.0):
-            raise ValueError("contingency_pct harus antara 1% dan 15%")
-        ppn_pct = float(self.config["ppn_pct"])
-        pph_pct = float(self.config["pph_pct"])
-        if not (0.0 <= ppn_pct <= 20.0):
-            raise ValueError("ppn_pct harus antara 0% dan 20%")
-        if not (0.0 <= pph_pct <= 10.0):
-            raise ValueError("pph_pct harus antara 0% dan 10%")
+       
+        self._validate_percentage("overhead_pct", 2.0, 25.0)
+        self._validate_percentage("profit_pct", 5.0, 25.0)
+        self._validate_percentage("contingency_pct", 1.0, 15.0)
+        self._validate_percentage("ppn_pct", 0.0, 20.0)
+        self._validate_percentage("pph_pct", 0.0, 10.0)
+        self._validate_percentage("inflation_pct", 0.0, 20.0)
+      
+        if not isinstance(self.config.get("duration_months"), int) or self.config["duration_months"] <= 0:
+            raise ValueError("duration_months harus integer positif")
+        
+        building_area = self.config.get("building_area")
+        if building_area is not None:
+            if not isinstance(building_area, (int, float)) or building_area <= 0:
+                raise ValueError("building_area harus positif jika diberikan")
+      
+        if not isinstance(self.config.get("template"), str) or not self.config["template"].strip():
+            raise ValueError("template harus berupa string non‑kosong")
+       
+        productivity = self.config.get("labor_productivity")
+        if productivity is not None and productivity not in self._productivity_factors():
+            logger.warning("labor_productivity '%s' tidak dikenal, akan menggunakan faktor 1.0", productivity)
 
-    def _generate_cashflow(self, base_amount: float, weights: List[float]) -> Dict[str, Any]:
-        total_weight = sum(weights)
-        if total_weight <= 0:
-            return {"error": "total bobot 0"}
-        monthly = [round(base_amount * w, 2) for w in weights]
-        cumulative = []
-        running = 0.0
-        for m in monthly:
-            running += m
-            cumulative.append(round(running, 2))
+    def _validate_percentage(self, key: str, min_val: float, max_val: float) -> None:
+       
+        val = self.config.get(key)
+        if val is None:
+            raise ValueError(f"{key} wajib diisi")
+        if not isinstance(val, (int, float)) or isinstance(val, bool):
+            raise TypeError(f"{key} harus berupa angka (int/float)")
+        val = float(val)
+        if not (min_val <= val <= max_val):
+            raise ValueError(f"{key} harus antara {min_val}% dan {max_val}%")
+       
+        self.config[key] = val
 
-        # Default termin schedule: uang muka 20%, 3 termin @ 25%, retensi 5% (dibayar akhir)
-        down_payment = round(base_amount * 0.20, 2)
-        progress_terms = [
-            {"term": "Termin 1", "trigger_progress": 0.25, "amount": round(base_amount * 0.25, 2)},
-            {"term": "Termin 2", "trigger_progress": 0.50, "amount": round(base_amount * 0.25, 2)},
-            {"term": "Termin 3", "trigger_progress": 0.75, "amount": round(base_amount * 0.25, 2)},
-        ]
-        retention = round(base_amount * 0.05, 2)
-
+    def _productivity_factors(self) -> Dict[str, float]:
+       
         return {
-            "base_amount": round(base_amount, 2),
-            "total_weight": round(total_weight, 4),
-            "monthly_outflow": monthly,
-            "cumulative_outflow": cumulative,
-            "termin_schedule": {
-                "down_payment": down_payment,
-                "progress_terms": progress_terms,
-                "retention": retention,
-            },
-        }
-
-    def _productivity_factor(self, level: str) -> float:
-        """Faktor produktivitas tenaga kerja. Koefisien = koefisien / faktor."""
-        factors = {
             "NORMAL": 1.00,
             "LAHAN_SEMPIT": 0.85,
             "CUACA_BURUK": 0.75,
@@ -110,20 +109,33 @@ class CostEngine:
             "MALAM": 0.80,
             "KETINGGIAN": 0.85,
         }
-        return factors.get(str(level).upper(), 1.0)
 
-    def _get_unit_price_for_item(self, wi_id: str, code: str, region: str, price_date: Optional[str] = None) -> Dict[str, Any]:
-        """Pilih sumber harga: segment override jika tersedia, selain itu KG biasa."""
+    def _productivity_factor(self, level: str) -> float:
+       
+        return self._productivity_factors().get(str(level).upper(), 1.0)
+
+    def _get_unit_price_for_item(
+        self,
+        wi_id: str,
+        code: str,
+        region: str,
+        price_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        
         segment = self.config.get("segment")
         if segment and hasattr(self.kg, "segment_overrides"):
             over = self.kg.segment_overrides.get(segment, {}).get(code)
             if over:
-                from fastra_core.knowledge.segment_calibration import calculate_unit_price_from_override
-                up = calculate_unit_price_from_override(over)
-                up["segment_calibrated"] = True
-                return up
-
-        # Mapping sementara internal BOQ -> WorkItem_Code kalibrasi per segmen
+                try:
+                    from fastra_core.knowledge.segment_calibration import (
+                        calculate_unit_price_from_override,
+                    )
+                    up = calculate_unit_price_from_override(over)
+                    up["segment_calibrated"] = True
+                    return up
+                except ImportError:
+                    logger.warning("Modul segment_calibration tidak tersedia, gunakan harga biasa")
+     
         segment_map = {
             "Rumah Sederhana": {
                 "STR.029": "WI-STR-BETON-K175",
@@ -159,20 +171,26 @@ class CostEngine:
                 "STR.029": "WI-INF-BETON-RIGID-PAVEMENT",
             },
         }
+
         if segment and code in segment_map.get(segment, {}):
             calibrated_code = segment_map[segment][code]
             over = self.kg.segment_overrides.get(segment, {}).get(calibrated_code)
             if over:
-                from fastra_core.knowledge.segment_calibration import calculate_unit_price_from_override
-                up = calculate_unit_price_from_override(over)
-                up["segment_calibrated"] = True
-                up["calibrated_from"] = calibrated_code
-                return up
-
+                try:
+                    from fastra_core.knowledge.segment_calibration import (
+                        calculate_unit_price_from_override,
+                    )
+                    up = calculate_unit_price_from_override(over)
+                    up["segment_calibrated"] = True
+                    up["calibrated_from"] = calibrated_code
+                    return up
+                except ImportError:
+                    logger.warning("Modul segment_calibration tidak tersedia, gunakan harga biasa")
+      
         return self.kg.get_unit_price(wi_id, region, price_date)
 
     def _build_vs_buy_analysis(self) -> Optional[Dict[str, Any]]:
-        """Analisis Build vs Buy sederhana dari config build_vs_buy."""
+       
         cfg = self.config.get("build_vs_buy")
         if not cfg:
             return None
@@ -181,7 +199,7 @@ class CostEngine:
         if ready_mix <= 0 or site_mix <= 0:
             return {
                 "status": "NEEDS_DATA",
-                "message": "Harga Ready Mix dan Site Mix belum diisi."
+                "message": "Harga Ready Mix dan Site Mix belum diisi.",
             }
         cheaper = "Ready Mix" if ready_mix <= site_mix else "Site Mix"
         saving = round(abs(ready_mix - site_mix), 2)
@@ -194,8 +212,47 @@ class CostEngine:
             "note": "Analisis berdasarkan harga per unit yang diberikan config build_vs_buy.",
         }
 
+    def _generate_cashflow(self, base_amount: float, weights: List[float]) -> Dict[str, Any]:
+        
+        if not isinstance(weights, list) or not weights:
+            return {"error": "weights harus list non‑kosong"}
+        if not all(isinstance(w, (int, float)) and w >= 0 for w in weights):
+            return {"error": "weights harus berisi angka non‑negatif"}
+
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return {"error": "total bobot 0"}
+        
+        normalized = [w / total_weight for w in weights]
+        monthly = [round(base_amount * w, 2) for w in normalized]
+        cumulative = []
+        running = 0.0
+        for m in monthly:
+            running += m
+            cumulative.append(round(running, 2))
+      
+        down_payment = round(base_amount * 0.20, 2)
+        progress_terms = [
+            {"term": "Termin 1", "trigger_progress": 0.25, "amount": round(base_amount * 0.25, 2)},
+            {"term": "Termin 2", "trigger_progress": 0.50, "amount": round(base_amount * 0.25, 2)},
+            {"term": "Termin 3", "trigger_progress": 0.75, "amount": round(base_amount * 0.25, 2)},
+        ]
+        retention = round(base_amount * 0.05, 2)
+
+        return {
+            "base_amount": round(base_amount, 2),
+            "total_weight": round(total_weight, 4),
+            "monthly_outflow": monthly,
+            "cumulative_outflow": cumulative,
+            "termin_schedule": {
+                "down_payment": down_payment,
+                "progress_terms": progress_terms,
+                "retention": retention,
+            },
+        }
+
     def _format_template(self, template_name: str, rab: Dict[str, Any]) -> Dict[str, Any]:
-        """Menghasilkan format output berbeda sesuai template."""
+        
         if template_name == "PUPR Standard (AHSP)":
             return {
                 "format": "PUPR_AHSP",
@@ -258,23 +315,37 @@ class CostEngine:
                 "grand_total": rab.get("grand_total"),
             }
         else:
+           
             return {"format": "SWASTA_DETAIL", **rab}
 
-    def generate_rab(self, boq: Dict[str, Any], region: str, price_date: Optional[str] = None) -> Dict[str, Any]:
-        effective_price_date: Optional[str] = price_date
+    def generate_rab(
+        self,
+        boq: Dict[str, Any],
+        region: str,
+        price_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+       
+        if not isinstance(boq, dict):
+            raise TypeError("boq harus berupa dictionary")
+        if "divisions" not in boq:
+            raise ValueError("boq harus memiliki key 'divisions'")
+        if not region or not region.strip():
+            raise ValueError("region tidak boleh kosong")
+        
+        effective_price_date = price_date
         if effective_price_date is None:
             pd = self.config.get("price_date")
             effective_price_date = pd if isinstance(pd, str) else None
-
-        overhead_pct: float = float(self.config["overhead_pct"])
-        profit_pct: float = float(self.config["profit_pct"])
-        ppn_pct: float = float(self.config["ppn_pct"])
-        pph_pct: float = float(self.config["pph_pct"])
-        contingency_pct: float = float(self.config["contingency_pct"])
-        inflation_pct: float = float(self.config["inflation_pct"])
-        duration_months: int = int(self.config["duration_months"])
+       
+        overhead_pct = float(self.config["overhead_pct"])
+        profit_pct = float(self.config["profit_pct"])
+        ppn_pct = float(self.config["ppn_pct"])
+        pph_pct = float(self.config["pph_pct"])
+        contingency_pct = float(self.config["contingency_pct"])
+        inflation_pct = float(self.config["inflation_pct"])
+        duration_months = int(self.config["duration_months"])
         building_area_value = self.config.get("building_area")
-        building_area: Optional[float] = float(building_area_value) if building_area_value else None
+        building_area = float(building_area_value) if building_area_value else None
 
         design_contingency_pct = float(self.config.get("design_contingency_pct", 0.0))
         construction_contingency_pct = float(self.config.get("construction_contingency_pct", 0.0))
@@ -285,7 +356,7 @@ class CostEngine:
         traceability: List[Dict[str, Any]] = []
         division_subtotals: Dict[str, Dict[str, Any]] = {}
         direct_cost = 0.0
-
+       
         for div in boq.get("divisions", []):
             div_code = div.get("division_code", "DIV-00")
             div_subtotal = 0.0
@@ -299,11 +370,12 @@ class CostEngine:
                 wi = self._wi_by_code.get(code)
                 wi_id = wi.id if wi else code
                 up = self._get_unit_price_for_item(wi_id, code, region, effective_price_date)
+
                 segment_calibrated = up.get("segment_calibrated", False)
                 calibrated_from = up.get("calibrated_from")
-
+             
                 if segment_calibrated:
-                    unit_price = up.get("unit_price", 0)
+                    unit_price = float(up.get("unit_price", 0))
                     total_price = round(qty * unit_price, 2)
                 else:
                     boq_unit_price = float(item.get("unit_price", 0))
@@ -312,11 +384,12 @@ class CostEngine:
                         unit_price = boq_unit_price
                         total_price = boq_total_price
                     else:
-                        unit_price = up.get("unit_price", 0)
+                        unit_price = float(up.get("unit_price", 0))
                         total_price = round(qty * unit_price, 2)
+
                 direct_cost += total_price
                 div_subtotal += total_price
-
+               
                 if up.get("errors") and not segment_calibrated:
                     traceability.append({
                         "boq_source": boq_item_uuid,
@@ -326,6 +399,7 @@ class CostEngine:
                     continue
 
                 ahs_ref = wi.sni_ref if wi else ""
+               
                 trace = TraceLog(generated_at=boq.get("generated_at"))
                 trace.add_step(
                     stage="COST_ENGINE",
@@ -381,13 +455,26 @@ class CostEngine:
             }
 
         direct_cost = round(direct_cost, 2)
-
+        
         overhead = round(direct_cost * overhead_pct / 100, 2)
         profit = round((direct_cost + overhead) * profit_pct / 100, 2)
         dpp = round(direct_cost + overhead + profit, 2)
+
+        qualification = self.config.get("contractor_qualification")
+        if qualification and hasattr(self.kg, "tax_rates"):
+            for kategori, mapping in self.kg.tax_rates.items():
+                for label, rate in mapping.items():
+                    if qualification.upper() in label.upper():
+                        pph_pct = float(rate) * 100
+                        self.config["pph_pct"] = pph_pct  # simpan untuk konsistensi
+                        break
+                else:
+                    continue
+                break
+
         ppn = round(dpp * ppn_pct / 100, 2)
         pph = round(dpp * pph_pct / 100, 2)
-        # Contingency terpisah
+        
         has_separate_contingency = (
             design_contingency_pct > 0 or
             construction_contingency_pct > 0 or
@@ -403,8 +490,7 @@ class CostEngine:
             construction_contingency = 0.0
             price_contingency = 0.0
             contingency = round(direct_cost * contingency_pct / 100, 2)
-
-        # Risk-based contingency (jika disediakan)
+       
         risk_contingency = 0.0
         if risk_register:
             for risk in risk_register:
@@ -413,13 +499,12 @@ class CostEngine:
                 risk_contingency += probability * impact
         risk_contingency = round(risk_contingency, 2)
         contingency = round(contingency + risk_contingency, 2)
-
+       
         annual_inflation = inflation_pct / 100
         months = duration_months
         escalation_factor = (1 + annual_inflation) ** (months / 12) - 1
         escalation = round(dpp * escalation_factor, 2)
-
-        # Material-specific escalation (linier sederhana)
+        
         material_escalation = 0.0
         for item in item_breakdown:
             for mat in item.get("material_breakdown", []):
@@ -428,67 +513,40 @@ class CostEngine:
                 material_escalation += cost * vol * (months / 12)
         material_escalation = round(material_escalation, 2)
         escalation = round(escalation + material_escalation, 2)
-
+       
         grand_total = round(dpp + ppn + pph + contingency + escalation, 2)
+       
         smkk_cost = None
         smkk_breakdown = None
         if self.config.get("include_smkk"):
             risk_level = self.config.get("risk_level") or "KECIL"
-            from fastra_core.compiler.smkk_engine import calculate_smkk
-            worker_count = int(self.config.get("worker_count", 25))
-            contract_value = self.config.get("contract_value")
-            smkk_result = calculate_smkk(
-                risk_level,
-                contract_value=contract_value,
-                worker_count=worker_count,
-                duration_months=duration_months,
-            )
-            smkk_cost = smkk_result["total_smkk"]
-            smkk_breakdown = smkk_result["components"]
-            grand_total = round(grand_total + smkk_cost, 2)
-
-        # Multi-template
-        template_name = self.config.get("template", "SWASTA_DETAIL")
-        template_columns = []
-        if hasattr(self.kg, "template_definitions"):
-            template_columns = self.kg.template_definitions.get(template_name, [])
-
-        # PPh Final berdasarkan kualifikasi
-        pph_pct = float(self.config.get("pph_pct", 0))
-        qualification = self.config.get("contractor_qualification")
-        if qualification and hasattr(self.kg, "tax_rates"):
-            # Coba cari tarif di kg.tax_rates
-            for kategori, mapping in self.kg.tax_rates.items():
-                for label, rate in mapping.items():
-                    if qualification.upper() in label.upper():
-                        pph_pct = float(rate) * 100  # rate dalam desimal
-                        break
-                else:
-                    continue
-                break
-            self.config["pph_pct"] = pph_pct
-            pph = round(dpp * pph_pct / 100, 2)
-
-        # Pajak daerah / retribusi
+            try:
+                from fastra_core.compiler.smkk_engine import calculate_smkk
+            except ImportError:
+                logger.warning("Modul smkk_engine tidak tersedia, SMKK dilewati")
+            else:
+                worker_count = int(self.config.get("worker_count", 25))
+                contract_value = self.config.get("contract_value")
+                smkk_result = calculate_smkk(
+                    risk_level,
+                    contract_value=contract_value,
+                    worker_count=worker_count,
+                    duration_months=duration_months,
+                )
+                smkk_cost = smkk_result["total_smkk"]
+                smkk_breakdown = smkk_result["components"]
+                grand_total = round(grand_total + smkk_cost, 2)
+       
         local_tax = float(self.config.get("local_tax", 0.0))
         grand_total = round(grand_total + local_tax, 2)
-
+      
         build_vs_buy = self._build_vs_buy_analysis()
-        # Template formatting
-        template_output = self._format_template(template_name, {
-            "project_uuid": boq.get("project_uuid"),
-            "direct_cost": direct_cost,
-            "overhead": overhead,
-            "profit": profit,
-            "ppn": ppn,
-            "pph_final": pph,
-            "grand_total": grand_total,
-            "item_breakdown": item_breakdown,
-            "division_summary": list(division_subtotals.values()),
-        })
-
+       
+        template_name = self.config.get("template", "SWASTA_DETAIL")
+        template_columns = getattr(self.kg, "template_definitions", {}).get(template_name, [])
+        
         cost_per_m2 = round(grand_total / building_area, 2) if building_area else None
-
+       
         value_engineering: List[Dict[str, Any]] = []
         if self.config.get("include_value_engineering"):
             alternatives = getattr(self.kg, "alternative_materials", [])
@@ -515,19 +573,29 @@ class CostEngine:
                                 "status": alt.get("status"),
                                 "potential_saving": round(total_saving, 2),
                             })
-
+       
         schedule_weights = self.config.get("schedule_weights")
         cashflow = None
         if schedule_weights:
             cashflow = self._generate_cashflow(grand_total, schedule_weights)
-
-        template_name = self.config.get("template", "SWASTA_DETAIL")
-        template_columns = getattr(self.kg, "template_definitions", {}).get(template_name, [])
-
-        return {
+       
+        rab_data = {
+            "project_uuid": boq.get("project_uuid"),
+            "direct_cost": direct_cost,
+            "overhead": overhead,
+            "profit": profit,
+            "ppn": ppn,
+            "pph_final": pph,
+            "grand_total": grand_total,
+            "item_breakdown": item_breakdown,
+            "division_summary": list(division_subtotals.values()),
+        }
+        template_output = self._format_template(template_name, rab_data)
+       
+        result = {
             "project_uuid": boq.get("project_uuid"),
             "generated_at": boq.get("generated_at"),
-            "template": self.config.get("template", "SWASTA_DETAIL"),
+            "template": template_name,
             "template_columns": template_columns,
             "cashflow": cashflow,
             "smkk_cost": smkk_cost,
@@ -555,3 +623,8 @@ class CostEngine:
             "build_vs_buy": build_vs_buy,
             "generated_by": "FASTRA Cost Engine v5.0 (ACES-500)",
         }
+
+        if template_name != "SWASTA_DETAIL":
+            result["formatted_output"] = template_output
+
+        return result

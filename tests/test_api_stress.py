@@ -18,7 +18,7 @@ from api_secure import app, limiter
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    """Reset rate limiter sebelum tiap test."""
+   
     limiter.store = {}
     old_max = api_secure.RATE_MAX
     old_window = api_secure.RATE_WINDOW

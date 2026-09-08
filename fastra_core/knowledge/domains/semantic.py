@@ -1,8 +1,36 @@
-# semantic.py - ACES-300 Layer 2: Semantic Layer
-# Kamus Sinonim untuk menangani variasi istilah lapangan (§7.4)
+# fastra_core/knowledge/domains/semantic.py
 
-SYNONYM_DICTIONARY = {
-    # Dinding & Pasangan
+from __future__ import annotations
+
+from types import MappingProxyType
+from typing import Dict, List
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ---------------------------------------------------------------------------
+# Inbound & Outbound DTOs – Pydantic Strict Gateway (Fail-Fast)
+# ---------------------------------------------------------------------------
+class TermQueryDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    term: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_\-\.\s\(\)\,\/]+$")
+
+
+class TermSynonymManifestDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    standard_term: str = Field(..., min_length=2, max_length=128)
+    synonyms: List[str] = Field(..., max_length=100)
+
+
+# ---------------------------------------------------------------------------
+# Repository Immutable Master Dictionary (Kamus Taksonomi Baku IQSI)
+# ---------------------------------------------------------------------------
+_SYNONYM_DICTIONARY_RAW: Dict[str, List[str]] = {
+  
     "Pasangan Bata Merah": [
         "Pasangan batu bata", "Tembok bata", "Dinding bata",
         "Pasangan bata", "Pemasangan batu bata"
@@ -17,8 +45,7 @@ SYNONYM_DICTIONARY = {
     "Acian": [
         "Semen halus", "Skim coat", "Aci", "Acian halus"
     ],
-
-    # Beton & Struktur
+   
     "Beton Ready Mix": [
         "Beton cor", "Beton jadi", "Ready mix concrete",
         "Beton ready mix", "Concrete ready mix"
@@ -39,8 +66,7 @@ SYNONYM_DICTIONARY = {
         "Penulangan", "Rebar", "Pemasangan besi",
         "Pekerjaan besi", "Steel reinforcement"
     ],
-
-    # Atap
+   
     "Rangka Atap Baja Ringan": [
         "Rangka atap galvalum", "Truss atap", "Kuda-kuda baja ringan",
         "Rangka baja ringan"
@@ -51,8 +77,7 @@ SYNONYM_DICTIONARY = {
     "Lisplang": [
         "Lisplank", "Fascia board", "Papan lisplang"
     ],
-
-    # Lantai
+   
     "Keramik Lantai": [
         "Tile lantai", "Ubin keramik", "Keramik",
         "Lantai keramik"
@@ -60,8 +85,7 @@ SYNONYM_DICTIONARY = {
     "Granit Lantai": [
         "Granite tile", "Lantai granit", "Homogeneous tile"
     ],
-
-    # MEP
+   
     "Instalasi Listrik": [
         "Pemasangan listrik", "Electrical installation",
         "Pekerjaan elektrikal"
@@ -70,8 +94,7 @@ SYNONYM_DICTIONARY = {
         "Pemasangan pipa", "Plumbing work", "Pekerjaan plumbing",
         "Instalasi pipa"
     ],
-
-    # Umum
+   
     "Pekerja": [
         "Labour", "Buruh", "Kenek", "Helper", "Unskilled worker"
     ],
@@ -83,14 +106,42 @@ SYNONYM_DICTIONARY = {
     ],
 }
 
-def get_standard_term(term: str) -> str:
-    """Mengembalikan istilah standar dari sinonim lapangan."""
-    term_lower = term.lower().strip()
-    for standard, synonyms in SYNONYM_DICTIONARY.items():
-        if term_lower in [s.lower() for s in synonyms] or term_lower == standard.lower():
-            return standard
-    return term
+SYNONYM_DICTIONARY: MappingProxyType = MappingProxyType(_SYNONYM_DICTIONARY_RAW)
 
-def get_synonyms(standard_term: str) -> list:
-    """Mengembalikan daftar sinonim untuk istilah standar."""
-    return SYNONYM_DICTIONARY.get(standard_term, [])
+_SYNONYM_LOOKUP: Dict[str, str] = {}
+for _std_term, _syns in SYNONYM_DICTIONARY.items():
+    _SYNONYM_LOOKUP[_std_term.lower().strip()] = _std_term
+    for _s in _syns:
+        _SYNONYM_LOOKUP[_s.lower().strip()] = _std_term
+
+
+# ---------------------------------------------------------------------------
+# Core Lexical Query Logic – Pure Semantic Matching (QS-Safe)
+# ---------------------------------------------------------------------------
+def get_standard_term(term: str) -> str:
+   
+    query_dto = TermQueryDTO(term=term)
+    cleaned_term = query_dto.term.lower().strip()
+   
+    return _SYNONYM_LOOKUP.get(cleaned_term, query_dto.term)
+
+
+def get_synonyms(standard_term: str) -> List[str]:
+    
+    if not standard_term or not standard_term.strip():
+        return []
+
+    cleaned_key = standard_term.strip()
+    
+    if cleaned_key in SYNONYM_DICTIONARY:
+        synonyms_pool = list(SYNONYM_DICTIONARY[cleaned_key])
+
+        output_payload = {
+            "standard_term": cleaned_key,
+            "synonyms": synonyms_pool,
+        }
+       
+        validated_manifest = TermSynonymManifestDTO.model_validate(output_payload)
+        return list(validated_manifest.synonyms)
+
+    return []

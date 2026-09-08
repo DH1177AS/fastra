@@ -1,146 +1,301 @@
+# fastra_core\knowledge\segment_calibration.py
 
-"""
-Parser untuk Segment_Calibration.xlsx.
-Memuat override AHSP per segmen ke dalam kg.segment_overrides.
-"""
-import pandas as pd
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+import enum
+import logging
+import os
 from collections import defaultdict
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger("fastra.knowledge")
 
 SEGMENT_FILE = r"D:\fastra_projects\Segment_Calibration.xlsx"
 
-def load_segment_calibration(kg: Any) -> None:
-    """Baca Segment_Calibration.xlsx dan isi kg.segment_overrides."""
-    if not kg:
-        return
+
+class CalibrationErrorCode(str, enum.Enum):
+   
+    CAL_001 = "CAL-001"  
+    CAL_002 = "CAL-002" 
+
+
+# ---------------------------------------------------------------------------
+# Inbound & Outbound DTOs – Pydantic Strict Gateway (Fail-Fast)
+# ---------------------------------------------------------------------------
+class InboundSegmentRowDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
+
+    Segment: str = Field(..., min_length=2, max_length=64, pattern=r"^[A-Za-z0-9_\-\s]+$")
+    WorkItem_Code: str = Field(..., min_length=2, max_length=32, pattern=r"^[A-Z0-9_\-\.]+$")
+    Material_ID: Optional[str] = Field(default=None, max_length=64)
+    Labor_ID: Optional[str] = Field(default=None, max_length=64)
+    Equipment_ID: Optional[str] = Field(default=None, max_length=64)
+    Coefficient_Override: Optional[float] = Field(default=None, gt=0.0, le=100000.0, allow_inf_nan=False)
+    Price_Override: Optional[float] = Field(default=None, ge=0.0, le=1e12, allow_inf_nan=False)
+    Waste_Override: float = Field(default=0.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    Source: str = Field(default="", max_length=256)
+
+
+class OverrideItemDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    id: str = Field(..., min_length=5, max_length=64)
+    coefficient: float = Field(..., gt=0.0, allow_inf_nan=False)
+    price: float = Field(..., ge=0.0, allow_inf_nan=False)
+    waste_factor: float = Field(default=1.0, ge=1.0, allow_inf_nan=False)
+    source: str = Field(default="", max_length=256)
+
+
+class SegmentOverrideContainerDTO(BaseModel):
+   
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    materials: List[OverrideItemDTO] = Field(default_factory=list, max_length=100)
+    labors: List[OverrideItemDTO] = Field(default_factory=list, max_length=100)
+    equipments: List[OverrideItemDTO] = Field(default_factory=list, max_length=100)
+    audit_check_price: Optional[float] = Field(default=None, ge=0.0, allow_inf_nan=False)
+
+
+# ---------------------------------------------------------------------------
+# Core Utilities – Jaminan Keamanan Type Casting
+# ---------------------------------------------------------------------------
+def _to_decimal(value: float | int | Decimal, field_name: str) -> Decimal:
+    
+    if isinstance(value, Decimal):
+        return value
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Field '{field_name}' wajib bertipe numerik dasar (int/float/Decimal).")
     try:
-        df = pd.read_excel(SEGMENT_FILE, sheet_name="Segment_Calibration")
-    except Exception as e:
-        print(f"Gagal baca Segment_Calibration: {e}")
+        return Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError(f"Field '{field_name}' gagal dikonversi ke representasi Decimal imutabel.") from exc
+
+
+# ---------------------------------------------------------------------------
+# Core Internal Calibration Reader & Calculations – Pure AHS (QS-Safe)
+# ---------------------------------------------------------------------------
+def load_segment_calibration(kg: Any) -> None:
+   
+    if not kg:
+        logger.warning("KnowledgeGraph tidak valid untuk segment calibration.")
+        return
+
+    if not os.path.exists(SEGMENT_FILE):
+        logger.info("File segment calibration tidak ditemukan, menggunakan override kosong.")
         kg.segment_overrides = {}
         return
 
-    kg.segment_overrides = defaultdict(lambda: defaultdict(lambda: {
-        "materials": [],
-        "labors": [],
-        "equipments": [],
-        "audit_check_price": None,
-    }))
+    try:
+        df = pd.read_excel(SEGMENT_FILE, sheet_name="Segment_Calibration")
+    except Exception as exc:
+        logger.warning("Gagal membaca file segment calibration: %s", exc)
+        kg.segment_overrides = {}
+        return
+   
+    raw_overrides: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(
+        lambda: defaultdict(
+            lambda: {
+                "materials": [],
+                "labors": [],
+                "equipments": [],
+                "audit_check_price": None,
+            }
+        )
+    )
 
     for _, row in df.iterrows():
-        segment = str(row.get("Segment", "")).strip()
-        wi_code = str(row.get("WorkItem_Code", "")).strip()
-        if not segment or not wi_code:
+        segment_raw = row.get("Segment")
+        wi_code_raw = row.get("WorkItem_Code")
+
+        if pd.isna(segment_raw) or pd.isna(wi_code_raw):
             continue
 
-        over = kg.segment_overrides[segment][wi_code]
+        segment_str = str(segment_raw).strip()
+        wi_code_str = str(wi_code_raw).strip()
+        if not segment_str or not wi_code_str:
+            continue
+       
+        coeff_raw = row.get("Coefficient_Override")
+        price_raw = row.get("Price_Override")
+        waste_raw = row.get("Waste_Override")
 
-        material_id = row.get("Material_ID")
-        labor_id = row.get("Labor_ID")
-        equipment_id = row.get("Equipment_ID")
-        coeff = row.get("Coefficient_Override")
-        price = row.get("Price_Override")
-        waste_override = row.get("Waste_Override")
-
-        # Baris AUDIT-CHECK bukan resource; simpan HSP resmi
-        if str(material_id).upper() == "AUDIT-CHECK":
-            if pd.notna(price):
-                over["audit_check_price"] = float(price)
+        row_payload = {
+            "Segment": segment_str,
+            "WorkItem_Code": wi_code_str,
+            "Material_ID": str(row.get("Material_ID")).strip() if pd.notna(row.get("Material_ID")) else None,
+            "Labor_ID": str(row.get("Labor_ID")).strip() if pd.notna(row.get("Labor_ID")) else None,
+            "Equipment_ID": str(row.get("Equipment_ID")).strip() if pd.notna(row.get("Equipment_ID")) else None,
+            "Coefficient_Override": float(coeff_raw) if pd.notna(coeff_raw) else None,
+            "Price_Override": float(price_raw) if pd.notna(price_raw) else None,
+            "Waste_Override": float(waste_raw) if pd.notna(waste_raw) else 0.0,
+            "Source": str(row.get("Source", "")).strip(),
+        }
+       
+        try:
+            validated_row = InboundSegmentRowDTO.model_validate(row_payload)
+        except Exception as exc:
+            logger.debug("Baris segment calibration tidak valid, dilewati: %s", exc)
             continue
 
-        try:
-            coeff = float(coeff) if pd.notna(coeff) else None
-        except (TypeError, ValueError):
-            coeff = None
+        target_node = raw_overrides[validated_row.Segment][validated_row.WorkItem_Code]
+        
+        if validated_row.Material_ID and validated_row.Material_ID.upper() == "AUDIT-CHECK":
+            if validated_row.Price_Override is not None:
+                price_dec = _to_decimal(validated_row.Price_Override, "audit_check_price")
+                target_node["audit_check_price"] = float(price_dec)
+            continue
 
-        try:
-            price_val = float(price) if pd.notna(price) else None
-        except (TypeError, ValueError):
-            price_val = None
+        if validated_row.Coefficient_Override is None or validated_row.Price_Override is None:
+            continue
 
-        try:
-            waste_extra = float(waste_override) if pd.notna(waste_override) else 0.0
-        except (TypeError, ValueError):
-            waste_extra = 0.0
-        waste_factor = 1.0 + waste_extra
+        coeff_dec = _to_decimal(validated_row.Coefficient_Override, "coeff")
+        price_dec = _to_decimal(validated_row.Price_Override, "price")
+        
+        waste_extra_dec = _to_decimal(validated_row.Waste_Override, "waste_extra")
+        waste_factor_dec = Decimal("1.0000") + waste_extra_dec
+       
+        if validated_row.Material_ID:
+            mat_item = {
+                "id": validated_row.Material_ID,
+                "coefficient": float(coeff_dec),
+                "price": float(price_dec),
+                "waste_factor": float(waste_factor_dec),
+                "source": validated_row.Source,
+            }
+            try:
+                target_node["materials"].append(OverrideItemDTO.model_validate(mat_item).model_dump())
+            except Exception as exc:
+                logger.warning("Material override tidak valid untuk %s: %s", wi_code_str, exc)
 
-        source = str(row.get("Source", "")).strip()
+        elif validated_row.Labor_ID:
+            lab_item = {
+                "id": validated_row.Labor_ID,
+                "coefficient": float(coeff_dec),
+                "price": float(price_dec),
+                "source": validated_row.Source,
+            }
+            try:
+                target_node["labors"].append(OverrideItemDTO.model_validate(lab_item).model_dump())
+            except Exception as exc:
+                logger.warning("Labor override tidak valid untuk %s: %s", wi_code_str, exc)
 
-        if pd.notna(material_id) and coeff is not None and price_val is not None:
-            over["materials"].append({
-                "id": str(material_id).strip(),
-                "coefficient": coeff,
-                "price": price_val,
-                "waste_factor": waste_factor,
-                "source": source,
-            })
-        if pd.notna(labor_id) and coeff is not None and price_val is not None:
-            over["labors"].append({
-                "id": str(labor_id).strip(),
-                "coefficient": coeff,
-                "price": price_val,
-                "source": source,
-            })
-        if pd.notna(equipment_id) and coeff is not None and price_val is not None:
-            over["equipments"].append({
-                "id": str(equipment_id).strip(),
-                "coefficient": coeff,
-                "price": price_val,
-                "source": source,
-            })
+        elif validated_row.Equipment_ID:
+            eqp_item = {
+                "id": validated_row.Equipment_ID,
+                "coefficient": float(coeff_dec),
+                "price": float(price_dec),
+                "source": validated_row.Source,
+            }
+            try:
+                target_node["equipments"].append(OverrideItemDTO.model_validate(eqp_item).model_dump())
+            except Exception as exc:
+                logger.warning("Equipment override tidak valid untuk %s: %s", wi_code_str, exc)
+   
+    final_overrides: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for seg_key, wi_dict in raw_overrides.items():
+        final_overrides[seg_key] = {}
+        for wi_key, raw_node in wi_dict.items():
+            try:
+                validated_container = SegmentOverrideContainerDTO.model_validate(raw_node)
+                final_overrides[seg_key][wi_key] = validated_container.model_dump()
+            except Exception as exc:
+                logger.warning("Container override tidak valid untuk %s/%s: %s", seg_key, wi_key, exc)
 
-    print(f"Segment calibration dimuat: {len(kg.segment_overrides)} segmen")
+    kg.segment_overrides = final_overrides
+    logger.info(
+        "Segment calibration berhasil dimuat: %d segmen, %d work item.",
+        len(final_overrides),
+        sum(len(v) for v in final_overrides.values()),
+    )
 
 
 def calculate_unit_price_from_override(override: Dict[str, Any]) -> Dict[str, Any]:
-    """Hitung unit price dari data override per segmen."""
-    material_cost = 0.0
-    labor_cost = 0.0
-    equipment_cost = 0.0
-    material_breakdown = []
-    labor_breakdown = []
-    equipment_breakdown = []
+    
+    try:
+        validated_override = SegmentOverrideContainerDTO.model_validate(override)
+    except Exception as exc:
+        raise ValueError(f"Override container tidak valid: {exc}") from exc
 
-    for m in override.get("materials", []):
-        cost = m["coefficient"] * m["price"] * m.get("waste_factor", 1.0)
-        material_cost += cost
+    material_cost = Decimal("0.0000")
+    labor_cost = Decimal("0.0000")
+    equipment_cost = Decimal("0.0000")
+
+    material_breakdown: List[Dict[str, Any]] = []
+    labor_breakdown: List[Dict[str, Any]] = []
+    equipment_breakdown: List[Dict[str, Any]] = []
+
+    # ---------------------------------------------------------------------------
+    # KOMPONEN OVERRIDE MATERIAL PIPELINE
+    # ---------------------------------------------------------------------------
+    for m in validated_override.materials:
+        coef_dec = _to_decimal(m.coefficient, "material.coefficient")
+        price_dec = _to_decimal(m.price, "material.price")
+        waste_dec = _to_decimal(m.waste_factor, "material.waste_factor")
+
+        # Rumus Komponen Bahan: Koefisien * Harga Satuan * Faktor Pemborosan
+        cost_val = coef_dec * price_dec * waste_dec
+        material_cost += cost_val
+
         material_breakdown.append({
-            "material_id": m["id"],
-            "coefficient": m["coefficient"],
-            "waste_factor": m.get("waste_factor", 1.0),
-            "unit_price": m["price"],
-            "cost": round(cost, 4),
-            "price_source": m.get("source", ""),
+            "material_id": m.id,
+            "coefficient": float(coef_dec),
+            "waste_factor": float(waste_dec),
+            "unit_price": float(price_dec),
+            "cost": float(cost_val.quantize(Decimal("0.0001"))),
+            "price_source": m.source,
         })
 
-    for l in override.get("labors", []):
-        cost = l["coefficient"] * l["price"]
-        labor_cost += cost
+    # ---------------------------------------------------------------------------
+    # KOMPONEN OVERRIDE UPAH TENAGA KERJA PIPELINE
+    # ---------------------------------------------------------------------------
+    for l in validated_override.labors:
+        coef_dec = _to_decimal(l.coefficient, "labor.coefficient")
+        price_dec = _to_decimal(l.price, "labor.price")
+
+        # Rumus Komponen Upah: Koefisien * Tarif Harian Orang Hari
+        cost_val = coef_dec * price_dec
+        labor_cost += cost_val
+
         labor_breakdown.append({
-            "labor_id": l["id"],
-            "coefficient": l["coefficient"],
-            "daily_rate": l["price"],
-            "cost": round(cost, 4),
-            "wage_source": l.get("source", ""),
+            "labor_id": l.id,
+            "coefficient": float(coef_dec),
+            "daily_rate": float(price_dec),
+            "cost": float(cost_val.quantize(Decimal("0.0001"))),
+            "wage_source": l.source,
         })
 
-    for e in override.get("equipments", []):
-        cost = e["coefficient"] * e["price"]
-        equipment_cost += cost
+    # ---------------------------------------------------------------------------
+    # KOMPONEN OVERRIDE SEWA PERALATAN MEKANIKAL PIPELINE
+    # ---------------------------------------------------------------------------
+    for e in validated_override.equipments:
+        coef_dec = _to_decimal(e.coefficient, "equipment.coefficient")
+        price_dec = _to_decimal(e.price, "equipment.price")
+
+        # Rumus Komponen Alat: Koefisien * Tarif Sewa Alat per Jam/Hari
+        cost_val = coef_dec * price_dec
+        equipment_cost += cost_val
+
         equipment_breakdown.append({
-            "equipment_id": e["id"],
-            "coefficient": e["coefficient"],
-            "rate": e["price"],
-            "cost": round(cost, 4),
-            "equipment_source": e.get("source", ""),
+            "equipment_id": e.id,
+            "coefficient": float(coef_dec),
+            "rate": float(price_dec),
+            "cost": float(cost_val.quantize(Decimal("0.0001"))),
+            "equipment_source": e.source,
         })
 
-    total = material_cost + labor_cost + equipment_cost
+    total_sum_val = material_cost + labor_cost + equipment_cost
+
     return {
-        "unit_price": round(total, 2),
-        "material_cost": round(material_cost, 2),
-        "labor_cost": round(labor_cost, 2),
-        "equipment_cost": round(equipment_cost, 2),
+        "unit_price": float(total_sum_val.quantize(Decimal("0.01"))),
+        "material_cost": float(material_cost.quantize(Decimal("0.01"))),
+        "labor_cost": float(labor_cost.quantize(Decimal("0.01"))),
+        "equipment_cost": float(equipment_cost.quantize(Decimal("0.01"))),
         "material_breakdown": material_breakdown,
         "labor_breakdown": labor_breakdown,
         "equipment_breakdown": equipment_breakdown,

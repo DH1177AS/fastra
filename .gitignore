@@ -10,6 +10,7 @@ venv/
 # Environment
 .env
 .env.*
+!.env.example          # Jangan abaikan file template environment
 *.secret
 
 # Logs & temp
