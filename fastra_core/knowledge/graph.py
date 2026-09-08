@@ -108,11 +108,6 @@ class KnowledgeGraph:
         self.physical_entities: Dict[str, Any] = {}
         self.relationships: List[Dict[str, Any]] = []
 
-    def add_work_item(self, work_item: Any) -> None:   
-        if not hasattr(self, "work_items"):
-            self.work_items = {}
-        self.work_items[getattr(work_item, "code", getattr(work_item, "id", ""))] = work_item
-
     def remove_work_item(self, code: str) -> None:    
         if hasattr(self, "work_items"):
             self.work_items.pop(code, None)

@@ -1,4 +1,4 @@
-﻿# fastra_core/digital_twin/change_order.py
+# fastra_core/digital_twin/change_order.py
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from fastra_core.identity import Identity
 from fastra_core.primitives.currency import Currency
 from fastra_core.digital_twin.enums import VOStatus, ApprovalStatus
+from .validators import LooseTimestamp, LooseUUID
 
 logger = logging.getLogger("fastra_core.digital_twin.change_order")
 
@@ -27,7 +28,7 @@ class ApprovalStep(BaseModel):
 
     role: str = Field(..., min_length=2, max_length=64)
     approved_by: str = Field(..., min_length=3, max_length=128)
-    date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    date: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = Field(default="APPROVED", min_length=1, max_length=32)
 
     @field_validator("date", mode="before")
@@ -59,13 +60,13 @@ class ChangeOrder(BaseModel):
         allow_inf_nan=False,
     )
 
-    project_uuid: str = Field(..., min_length=1, max_length=64)
+    project_uuid: LooseUUID = Field(..., max_length=64)
     vo_number: str = Field(..., min_length=3, max_length=64, pattern=r"^[A-Za-z0-9\-\/]+$")
     description: str = Field(..., min_length=5, max_length=1024)
     reason: str = Field(..., min_length=1, max_length=1024)
-    request_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    request_date: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     requested_by: str = Field(..., min_length=1, max_length=128)
-    vo_uuid: str = Field(default_factory=lambda: str(Identity.generate()), min_length=1, max_length=64)
+    vo_uuid: LooseUUID = Field(default_factory=lambda: str(Identity.generate()))
     ccm_changes: Dict[str, Any] = Field(default_factory=dict)
     boq_impact: Dict[str, Any] = Field(default_factory=dict)
     cost_impact: Dict[str, Any] = Field(default_factory=dict)

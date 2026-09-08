@@ -216,10 +216,10 @@ class ExtendedDigitalTwinDB(SQLAlchemyDigitalTwinDB):
 
                 progress_payload = {
                     "project_uuid": row.project_uuid,
-                    "report_date": row.report_date if isinstance(row.report_date, datetime) else datetime.fromisoformat(str(row.report_date)),
+                    "report_date": str(row.report_date),
                     "report_type": row.report_type,
-                    "period_start": row.period_start if isinstance(row.period_start, datetime) else datetime.fromisoformat(str(row.period_start)),
-                    "period_end": row.period_end if isinstance(row.period_end, datetime) else datetime.fromisoformat(str(row.period_end)),
+                    "period_start": str(row.period_start),
+                    "period_end": str(row.period_end),
                     "overall_progress_percentage": float(row.overall_progress_percentage),
                     "progress_entry_uuid": row.progress_entry_uuid,
                     "entity_progress": tuple(EntityProgress(**ep) for ep in raw_ep) if isinstance(raw_ep, list) else (),
@@ -253,7 +253,7 @@ class ExtendedDigitalTwinDB(SQLAlchemyDigitalTwinDB):
                     "related_vo": row.related_vo,
                     "ip_address": row.ip_address,
                     "user_agent": row.user_agent,
-                    "timestamp": row.timestamp if isinstance(row.timestamp, datetime) else datetime.fromisoformat(str(row.timestamp)),
+                    "timestamp": str(row.timestamp),
                     "event_uuid": row.event_uuid,
                     "metadata": self._sanitize_json_loads(row.extra_metadata) if row.extra_metadata else {},
                     "prev_hash": row.prev_hash or "",
@@ -587,9 +587,7 @@ class ExtendedDigitalTwinDB(SQLAlchemyDigitalTwinDB):
                     separators=(",", ":"),
                 ),
                 execution_time_ms=float(event.execution_time_ms),
-                timestamp=event.timestamp
-                if isinstance(event.timestamp, datetime)
-                else datetime.fromisoformat(str(event.timestamp)),
+                timestamp=str(event.timestamp),
             )
             session.merge(orm)
             session.commit()

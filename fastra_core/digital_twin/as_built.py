@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fastra_core.identity import Identity
+from .validators import LooseUUID
+from .validators import LooseUUID
 
 logger = logging.getLogger("fastra_core.digital_twin.as_built")
 
@@ -20,7 +22,7 @@ class AsBuiltDifference(BaseModel):
         allow_inf_nan=False,
     )
 
-    entity_uuid: str = Field(..., min_length=1, max_length=128)
+    entity_uuid: LooseUUID = Field(..., max_length=64)
     field: str = Field(..., min_length=1, max_length=128)
     planned_value: Any = Field(default=None)
     as_built_value: Any = Field(default=None)
@@ -59,8 +61,8 @@ class AsBuiltRecord(BaseModel):
         allow_inf_nan=False,
     )
 
-    project_uuid: str = Field(..., min_length=1, max_length=128)
-    entity_uuid: str = Field(..., min_length=1, max_length=128)
+    project_uuid: LooseUUID = Field(..., max_length=64)
+    entity_uuid: LooseUUID = Field(..., max_length=64)
     planned_state: Dict[str, Any] = Field(default_factory=dict)
     as_built_state: Dict[str, Any] = Field(default_factory=dict)
     record_uuid: str = Field(
@@ -162,3 +164,4 @@ class AsBuiltStore(BaseModel):
             logger.error("AS_BUILT_STORE_QUERY_INVALID_PROJECT_UUID: %r", project_uuid)
             raise ValueError(f"INVALID_QUERY_PROJECT_UUID_STRUCTURE: {project_uuid}")
         return [r for r in self.records.values() if r.project_uuid == project_uuid]
+

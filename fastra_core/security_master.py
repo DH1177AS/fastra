@@ -23,6 +23,8 @@ from fastra_security.runtime.memory_guard import secure_string, wipe_string
 
 logger = logging.getLogger("fastra_core.security_master")
 
+PRODUCTION_ENV_TOKEN = "production"
+
 
 class MasterSecurity(BaseModel):
     """

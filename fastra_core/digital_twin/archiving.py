@@ -13,12 +13,9 @@ from fastra_core.serialization.canonical_json import to_json
 from fastra_core.digital_twin.snapshot import SnapshotStore
 from fastra_core.digital_twin.as_built import AsBuiltStore
 from fastra_core.digital_twin.audit import AuditStore
+from .validators import LooseUUID, LooseTimestamp
 
 logger = logging.getLogger("fastra_core.digital_twin.archiving")
-
-# === DEBUG SEMENTARA: simpan JSON kanonik saat create, untuk dibandingkan saat verify ===
-_DEBUG_CANONICAL_JSON_AT_CREATE: Dict[str, str] = {}
-# === END DEBUG GLOBALS ===
 
 
 class ArchiveRecord(BaseModel):
@@ -31,9 +28,9 @@ class ArchiveRecord(BaseModel):
         allow_inf_nan=False,
     )
 
-    archive_uuid: str = Field(default_factory=lambda: str(Identity.generate()), min_length=1, max_length=64)
-    project_uuid: str = Field(..., min_length=1, max_length=64)
-    archived_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    archive_uuid: LooseUUID = Field(default_factory=lambda: str(Identity.generate()))
+    project_uuid: LooseUUID = Field(...)
+    archived_at: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     project_metadata: Dict[str, Any] = Field(default_factory=dict)
     snapshots: Tuple[Dict[str, Any], ...] = Field(default_factory=tuple)
     as_built_records: Tuple[Dict[str, Any], ...] = Field(default_factory=tuple)
@@ -83,45 +80,6 @@ class ArchiveRecord(BaseModel):
                 expected,
                 self.checksum,
             )
-            # === DEBUG SEMENTARA: auto-diff JSON kanonik create vs verify ===
-            try:
-                json_at_verify = to_json(self.to_canonical_dict())
-                json_at_create = _DEBUG_CANONICAL_JSON_AT_CREATE.get(self.archive_uuid)
-                if json_at_create is None:
-                    logger.error(
-                        "DEBUG_NO_CREATE_TIME_SNAPSHOT_FOUND_FOR: %s "
-                        "(archive dibuat di proses/objek store yang berbeda?)",
-                        self.archive_uuid,
-                    )
-                elif json_at_create == json_at_verify:
-                    logger.error(
-                        "DEBUG_JSON_STRINGS_ARE_IDENTICAL_BUT_HASH_DIFFERS: %s "
-                        "-> BUG ADA DI canonical_hash()/hashlib SENDIRI, BUKAN DI SERIALISASI",
-                        self.archive_uuid,
-                    )
-                else:
-                    import difflib
-                    diff = "\n".join(
-                        difflib.unified_diff(
-                            [json_at_create],
-                            [json_at_verify],
-                            fromfile="at_create",
-                            tofile="at_verify",
-                            lineterm="",
-                        )
-                    )
-                    logger.error("DEBUG_CANONICAL_JSON_DIFF:\n%s", diff)
-                    with open(os.path.join(tempfile.gettempdir(), f"archive_debug_{self.archive_uuid}_create.json"), "w", encoding="utf-8") as f:
-                        f.write(json_at_create)
-                    with open(os.path.join(tempfile.gettempdir(), f"archive_debug_{self.archive_uuid}_verify.json"), "w", encoding="utf-8") as f:
-                        f.write(json_at_verify)
-                    logger.error(
-                        "DEBUG_FULL_DUMPS_WRITTEN_TO: /tmp/archive_debug_%s_create.json AND _verify.json",
-                        self.archive_uuid,
-                    )
-            except Exception as dump_exc:
-                logger.error("DEBUG_INSTRUMENTATION_FAILED: %s", dump_exc)
-            # === END DEBUG ===
         return match
 
 
@@ -182,10 +140,6 @@ class ArchiveStore(BaseModel):
 
         final_archive = ArchiveRecord.model_validate(final_record_data)
         self.archives[final_archive.archive_uuid] = final_archive
-
-        # === DEBUG SEMENTARA: simpan JSON kanonik persis saat ini untuk dibandingkan nanti ===
-        _DEBUG_CANONICAL_JSON_AT_CREATE[final_archive.archive_uuid] = to_json(final_archive.to_canonical_dict())
-        # === END DEBUG ===
 
         logger.info("Archive created: %s", final_archive.archive_uuid)
         return final_archive

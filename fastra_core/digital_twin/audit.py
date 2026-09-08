@@ -1,4 +1,4 @@
-﻿# fastra_core/digital_twin/audit.py
+# fastra_core/digital_twin/audit.py
 
 from __future__ import annotations
 
@@ -12,12 +12,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from fastra_core.identity import Identity
 from fastra_core.serialization.hash import canonical_hash
 from fastra_core.digital_twin.enums import EventType
+from .validators import LooseTimestamp, LooseUUID
 
 logger = logging.getLogger("fastra_core.digital_twin.audit")
 
 
 class AuditEvent(BaseModel):
-  
+
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
@@ -37,8 +38,8 @@ class AuditEvent(BaseModel):
         pattern=r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}$",
     )
     user_agent: Optional[str] = Field(default=None, max_length=512)
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    event_uuid: str = Field(default_factory=lambda: str(Identity.generate()), min_length=1, max_length=64)
+    timestamp: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    event_uuid: LooseUUID = Field(default_factory=lambda: str(Identity.generate()))
     metadata: Dict[str, Any] = Field(default_factory=dict)
     prev_hash: str = Field(default="", max_length=64)
     hash: str = Field(default="", max_length=64)
@@ -88,7 +89,7 @@ class AuditEvent(BaseModel):
 
 
 class AuditStore(BaseModel):
-   
+
     model_config = ConfigDict(
         extra="forbid",
         strict=True,
@@ -97,11 +98,11 @@ class AuditStore(BaseModel):
     )
 
     events: List[AuditEvent] = Field(default_factory=list)
-    
+
     @property
     def _events(self):
         return self.events
-    
+
     def record_event(
         self,
         event_type: str,
@@ -116,7 +117,7 @@ class AuditStore(BaseModel):
         event_uuid: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AuditEvent:
-       
+
         if timestamp is not None:
             if isinstance(timestamp, datetime):
                 timestamp_str = timestamp.isoformat()

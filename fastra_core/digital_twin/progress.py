@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from fastra_core.digital_twin.enums import IssueSeverity, IssueStatus, ProgressStatus, ReportType
 from fastra_core.identity import Identity
+from .validators import LooseTimestamp, LooseUUID
 
 logger = logging.getLogger("fastra_core.digital_twin.progress")
 
@@ -174,13 +175,13 @@ class ProgressEntry(BaseModel):
         allow_inf_nan=False,
     )
 
-    project_uuid: str = Field(..., min_length=1, max_length=128)
-    report_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    project_uuid: LooseUUID = Field(..., max_length=64)
+    report_date: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     report_type: str = Field(default="DAILY", min_length=1, max_length=64)
-    period_start: Optional[str] = Field(default=None)
-    period_end: Optional[str] = Field(default=None)
+    period_start: Optional[LooseTimestamp] = Field(default=None)
+    period_end: Optional[LooseTimestamp] = Field(default=None)
     overall_progress_percentage: float = Field(default=0.0, ge=0.0, le=100.0)
-    progress_entry_uuid: str = Field(default_factory=lambda: str(Identity.generate()), min_length=1, max_length=128)
+    progress_entry_uuid: LooseUUID = Field(default_factory=lambda: str(Identity.generate()))
     entity_progress: Tuple[EntityProgress, ...] = Field(default_factory=tuple)
     issues: Tuple[Issue, ...] = Field(default_factory=tuple)
     weather: Dict[str, Any] = Field(default_factory=dict)
@@ -198,6 +199,16 @@ class ProgressEntry(BaseModel):
             raise ValueError("STRING_VALUE_CANNOT_BE_EMPTY_OR_WHITESPACE")
         return stripped
 
+    @field_validator("report_date", "period_start", "period_end", mode="before")
+    @classmethod
+    def coerce_timestamp_to_iso(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if not isinstance(value, str):
+            raise TypeError("TIMESTAMP_MUST_BE_STRING_OR_DATETIME")
+        return value
     @field_validator("weather", "labor_on_site", "metadata", mode="before")
     @classmethod
     def validate_dictionaries_no_coercion(cls, value: Any) -> Dict[str, Any]:

@@ -1,4 +1,4 @@
-# fastra_core\compiler\utils.py
+﻿# fastra_core\compiler\utils.py
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ import dataclasses
 import enum
 from datetime import datetime, date, time
 from decimal import Decimal
+import logging
 from typing import Any, Dict, List, Mapping
+
+logger = logging.getLogger("fastra_core.compiler.utils")
 
 
 def _normalize_value(value: Any) -> Any:

@@ -1,4 +1,4 @@
-# fastra_core\compiler\topology_builder.py
+﻿# fastra_core\compiler\topology_builder.py
 
 from __future__ import annotations
 
@@ -7,7 +7,11 @@ from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Tuple
 
+import logging
+
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger("fastra_core.compiler.topology_builder")
 
 from fastra_core.ccm.physical import Wall
 

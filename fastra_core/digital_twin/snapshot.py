@@ -1,4 +1,4 @@
-﻿# fastra_core/digital_twin/snapshot.py
+# fastra_core/digital_twin/snapshot.py
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .validators import LooseTimestamp, LooseUUID
 
 logger = logging.getLogger("fastra_core.digital_twin.snapshot")
 
@@ -22,11 +24,11 @@ class Snapshot(BaseModel):
         allow_inf_nan=False,
     )
 
-    snapshot_uuid: str = Field(..., min_length=1, max_length=64)
+    snapshot_uuid: LooseUUID = Field(..., max_length=64)
     snapshot_name: str = Field(..., min_length=2, max_length=255)
     snapshot_type: str = Field(..., min_length=1, max_length=50)
-    project_uuid: str = Field(..., min_length=1, max_length=64)
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    project_uuid: LooseUUID = Field(..., max_length=64)
+    timestamp: LooseTimestamp = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     description: str = Field(default="", max_length=1024)
     ccm_state: Dict[str, Any] = Field(default_factory=dict)
     boq_state: Optional[Dict[str, Any]] = Field(default=None)

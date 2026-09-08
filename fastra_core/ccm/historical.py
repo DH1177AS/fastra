@@ -1,9 +1,13 @@
-# historical.py - ACES-300 Layer 6: Historical Layer
-# Template untuk data proyek historis
+from __future__ import annotations
 
+import enum
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
 
 @dataclass
 class HistoricalProject:
@@ -23,6 +27,7 @@ class HistoricalProject:
     labor_cost_actual: Dict = field(default_factory=dict)
     productivity_actual: Dict = field(default_factory=dict)
 
+
 @dataclass
 class HistoricalPriceTrend:
     """Data tren harga material per kuartal."""
@@ -35,26 +40,8 @@ class HistoricalPriceTrend:
     q1_2025: float = 0.0
     q2_2025: float = 0.0
 
-# Sample data tren harga sesuai ACES-300 Section 11.3
-SAMPLE_PRICE_TRENDS = [
-    HistoricalPriceTrend("Semen (sak)", "sak", 58000, 58500, 60000, 62000, 63000, 63500),
-    HistoricalPriceTrend("Baja Ringan (batang)", "batang", 75000, 76000, 78000, 80000, 82000, 81000),
-    HistoricalPriceTrend("Besi D10 (batang)", "batang", 110000, 112000, 115000, 118000, 120000, 119000),
-    HistoricalPriceTrend("Genteng Beton (buah)", "buah", 6000, 6000, 6200, 6500, 6500, 6800),
-]
-# fastra_core\ccm\historical.py
-
-from __future__ import annotations
-
-import enum
-from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
 
 class BuildingType(str, enum.Enum):
-   
     HOUSE = "HOUSE"
     OFFICE = "OFFICE"
     WAREHOUSE = "WAREHOUSE"
@@ -66,7 +53,6 @@ class BuildingType(str, enum.Enum):
 # Inbound DTOs – Pydantic Strict Gateway & Sanitization (Fail-Fast)
 # ---------------------------------------------------------------------------
 class HistoricalProjectInboundDTO(BaseModel):
-  
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
@@ -103,7 +89,6 @@ class HistoricalProjectInboundDTO(BaseModel):
     def validate_metrics_dictionary(
         cls, value: Dict[str, float]
     ) -> Dict[str, float]:
-       
         for k, v in value.items():
             if not k.strip():
                 raise ValueError(
@@ -117,7 +102,6 @@ class HistoricalProjectInboundDTO(BaseModel):
 
     @model_validator(mode="after")
     def validate_date_order(self) -> "HistoricalProjectInboundDTO":
-        
         if self.start_date > self.end_date:
             raise ValueError(
                 "Urutan kronologis salah: tanggal mulai tidak boleh melewati tanggal selesai."
@@ -126,7 +110,6 @@ class HistoricalProjectInboundDTO(BaseModel):
 
 
 class HistoricalPriceTrendInboundDTO(BaseModel):
-    
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
@@ -149,7 +132,6 @@ class HistoricalPriceTrendInboundDTO(BaseModel):
 # Core Utilities – Jaminan Keamanan Type Casting
 # ---------------------------------------------------------------------------
 def _to_decimal(value: float | int, field_name: str) -> Decimal:
-    
     if not isinstance(value, (int, float)):
         raise TypeError(f"Field '{field_name}' wajib bertipe numerik dasar (int/float).")
     try:
@@ -160,9 +142,6 @@ def _to_decimal(value: float | int, field_name: str) -> Decimal:
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Domain Models – Pure Business & Historical Logical Invariants
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Data Sampel Validasi Tren – ACES-300 Seksi 11.3 Compliance
 # ---------------------------------------------------------------------------
