@@ -1,4 +1,4 @@
-﻿"""
+"""
 FASTRA Backend Runner Engine
 Menjalankan API Digital Twin Secure (port 8000) dan API AI Secure (port 8001)
 secara bersamaan dalam satu proses menggunakan multiprocessing terisolasi.
@@ -39,10 +39,11 @@ FORWARDED_ALLOW_IPS = os.getenv("FASTRA_FORWARDED_ALLOW_IPS", "127.0.0.1")
 # 1. SUBPROCESS EXECUTORS
 # ------------------------------------------------------------------------------
 def run_digital_twin() -> None:
+    os.environ['FASTRA_DATABASE_URL'] = os.getenv('FASTRA_DT_DB_URL', 'sqlite:///fastra_dt_dev.db')
     """Menjalankan API Digital Twin Secure Server."""
     try:
         uvicorn.run(
-            "fastra_core.api_digital_twin_secure:app",
+            "api_digital_twin_secure:app",
             host="0.0.0.0",
             port=DIGITAL_TWIN_PORT,
             log_level="info",
@@ -56,10 +57,11 @@ def run_digital_twin() -> None:
 
 
 def run_ai_layer() -> None:
+    os.environ['FASTRA_DATABASE_URL'] = os.getenv('FASTRA_AI_DB_URL', 'sqlite:///fastra_ai_dev.db')
     """Menjalankan API AI Layer Secure Server."""
     try:
         uvicorn.run(
-            "fastra_core.api_ai:app",
+            "api_ai:app",
             host="0.0.0.0",
             port=AI_LAYER_PORT,
             log_level="info",

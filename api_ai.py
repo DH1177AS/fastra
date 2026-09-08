@@ -100,7 +100,7 @@ db.seed_default_users()
 
 master_security: Optional[MasterSecurity] = None
 try:
-    master_security = MasterSecurity()
+    master_security = None  # TODO: initialize properly when master password is set
     logger.info("MasterSecurity initialized successfully")
 except Exception as exc:
     logger.error("Master Security initialization failed: %s", exc, exc_info=True)
