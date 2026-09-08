@@ -6,6 +6,7 @@ import enum
 import logging
 import os
 from decimal import Decimal, InvalidOperation
+from types import MappingProxyType
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,11 +19,11 @@ class SMKKRiskLevel(str, enum.Enum):
     SEDANG = "SEDANG"
     BESAR = "BESAR"
 
-RISK_LEVELS = {
+RISK_LEVELS = MappingProxyType({
     "KECIL": 0.5,
     "SEDANG": 1.0,
     "BESAR": 2.0,
-}
+})
 
 
 class SMKKComponentCode(str, enum.Enum):
@@ -48,7 +49,7 @@ class SMKKQSStatus(str, enum.Enum):
 
 SMKK_FILE = r"D:\fastra_projects\SMKK_Calibration.xlsx"
 
-COMPONENT_LABELS: Dict[SMKKComponentCode, str] = {
+COMPONENT_LABELS: Dict[SMKKComponentCode, str] = MappingProxyType({
     SMKKComponentCode.A: "A. Penyiapan Dokumen Penerapan SMKK",
     SMKKComponentCode.B: "B. Sosialisasi, Promosi, dan Pelatihan",
     SMKKComponentCode.C: "C. Alat Pelindung Kerja dan Alat Pelindung Diri",
@@ -58,9 +59,9 @@ COMPONENT_LABELS: Dict[SMKKComponentCode, str] = {
     SMKKComponentCode.G: "G. Rambu dan Perlengkapan Lalu Lintas",
     SMKKComponentCode.H: "H. Konsultasi dengan Ahli Terkait Keselamatan Konstruksi",
     SMKKComponentCode.I: "I. Kegiatan dan Peralatan Terkait Pengendalian Risiko",
-}
+})
 
-DEFAULT_PRICES: Dict[SMKKRiskLevel, Dict[SMKKComponentCode, float]] = {
+DEFAULT_PRICES: Dict[SMKKRiskLevel, Dict[SMKKComponentCode, float]] = MappingProxyType({
     SMKKRiskLevel.KECIL: {
         SMKKComponentCode.A: 3000000.0, SMKKComponentCode.B: 5000000.0, SMKKComponentCode.C: 15000000.0,
         SMKKComponentCode.D: 3000000.0, SMKKComponentCode.E: 5399406.0, SMKKComponentCode.F: 2000000.0,
@@ -77,6 +78,7 @@ DEFAULT_PRICES: Dict[SMKKRiskLevel, Dict[SMKKComponentCode, float]] = {
         SMKKComponentCode.G: 10000000.0, SMKKComponentCode.H: 18000000.0, SMKKComponentCode.I: 35000000.0
     },
 }
+)
 
 
 # ---------------------------------------------------------------------------

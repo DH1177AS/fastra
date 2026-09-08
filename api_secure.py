@@ -44,21 +44,21 @@ logging.basicConfig(
 # ------------------------------------------------------------------------------
 # Configuration (Environment)
 # ------------------------------------------------------------------------------
-VALID_REGIONS = {
+VALID_REGIONS = frozenset({
     "JAKARTA", "SURABAYA", "BANDUNG", "SEMARANG", "MEDAN", "MAKASSAR",
     "YOGYAKARTA", "DENPASAR", "BALIKPAPAN", "PALEMBANG", "PEKANBARU",
     "BANJARMASIN", "MANADO", "PADANG", "BOGOR", "TANGERANG", "BEKASI",
     "DEPOK", "MALANG", "SOLO",
-}
+})
 
 API_KEY = os.getenv("FASTRA_API_KEY", "dev-api-key-change-me")
 API_KEY_HASH = hashlib.sha256(API_KEY.encode("utf-8")).hexdigest()
 
-ALLOWED_ORIGINS = [
+ALLOWED_ORIGINS = (
     origin.strip()
     for origin in os.getenv("FASTRA_CORS_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
     if origin.strip()
-]
+)
 
 FASTRA_MODE = os.getenv("FASTRA_MODE", "production").strip().lower()
 if FASTRA_MODE not in {"production", "demo"}:

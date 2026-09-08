@@ -1,4 +1,4 @@
-# fastra_core\compiler\ccm_validator.py
+﻿# fastra_core\compiler\ccm_validator.py
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ logger = logging.getLogger("ccm_validator")
 # Konstanta skema
 # --------------------------------------------------------------------------
 
-STRUCTURAL_ELEMENT_TYPES = {"Wall", "Column", "Beam", "Slab", "Foundation", "Roof"}
+STRUCTURAL_ELEMENT_TYPES = frozenset({"Wall", "Column", "Beam", "Slab", "Foundation", "Roof"})
 
-OPENING_ELEMENT_TYPES = {"Door", "Window"}
+OPENING_ELEMENT_TYPES = frozenset({"Door", "Window"})
 
 SCHEMA_VERSION = "CCM-MASTER-2026.V1"
 
